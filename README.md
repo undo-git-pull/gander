@@ -44,7 +44,11 @@ This writes:
 
 The build targets the machine's architecture, so on Apple Silicon you get an arm64 build only. An Intel or universal build needs `rustup target add x86_64-apple-darwin` and `pnpm tauri build --target universal-apple-darwin`; that path has not been tried yet.
 
-The app is ad hoc signed, with no Developer ID and no notarization. A copy built on your own machine opens normally. A copy downloaded from elsewhere is quarantined by Gatekeeper; right click the app and choose Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Gander.app`.
+The app is ad hoc signed (`"signingIdentity": "-"` in `tauri.conf.json`), with no Developer ID and no notarization. A copy built on your own machine opens normally. A copy downloaded from elsewhere, such as a GitHub release, is quarantined, and the first launch shows "Apple could not verify 'Gander' is free of malware". To open it, click Done, then go to System Settings > Privacy & Security, scroll down to the message about Gander, click Open Anyway and enter your password. Right click and Open no longer skips this check on macOS 15 and later. Alternatively, run `xattr -dr com.apple.quarantine /Applications/Gander.app` once after installing.
+
+Without the `signingIdentity` setting only the executable carries the linker's signature, the bundle is not sealed, and a downloaded copy is reported as damaged with no Open Anyway option. Check a build with `codesign --verify --deep --strict src-tauri/target/release/bundle/macos/Gander.app`, which should print nothing.
+
+Signing also turns on the hardened runtime, which normally refuses to load libraries signed by someone else. DuckDB extensions are such libraries, so `src-tauri/Entitlements.plist` sets `com.apple.security.cs.disable-library-validation`. Without it, `INSTALL` succeeds but `LOAD` fails with "mapping process and mapped file (non-platform) have different Team IDs".
 
 ### Test the release
 
