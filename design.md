@@ -137,7 +137,8 @@ Data sources:
 Schema browser (when a DuckDB file is open):
 - Tree of databases, schemas, tables, views, and columns with types.
 - A filter box sits at the top of the tree with fzf-style fuzzy matching, using the `fzf` npm package (a port of fzf's matching algorithm). It matches against `schema.table` and `table.column`, so `ord am` finds `orders.amount`. Space-separated terms must all match, matched characters are highlighted, and results are ranked by fzf's score with exact and prefix matches first.
-- `Cmd+P` focuses the filter from anywhere. Arrow keys move through matches, `Enter` on a table inserts `FROM <table>` into the editor and runs it, `Enter` on a column inserts the column name at the cursor, `Esc` clears the filter.
+- `Cmd+B` collapses or restores the whole left sidebar, as does the panel button at the left end of the toolbar. Dragging the divider to the edge also collapses it.
+- `Cmd+P` focuses the filter from anywhere, reopening the sidebar first if it is collapsed. Arrow keys move through matches, `Enter` on a table inserts `FROM <table>` into the editor and runs it, `Enter` on a column inserts the column name at the cursor, `Esc` clears the filter.
 - Double click a table to run `FROM <table>`: in the current tab when its editor is empty, otherwise in a new tab, so the user's query is never overwritten. The row limit applies, so no `LIMIT` is needed in the text.
 - In files-only mode the sidebar shows a short hint with example `FROM 'file.parquet'` queries instead of the tree, plus any tables or views the user has created in the in-memory database.
 

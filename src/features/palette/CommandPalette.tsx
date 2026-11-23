@@ -8,6 +8,7 @@ import { focusSchemaFilter } from "@/features/sidebar/Sidebar";
 import { openDuckdbFile, openSource } from "@/features/toolbar/Toolbar";
 import { copyText } from "@/lib/format";
 import { setThemePref, THEME_LABEL } from "@/lib/theme";
+import { expandSidebar, toggleSidebar } from "@/lib/sidebar";
 
 function ago(ts: number) {
   const s = Date.now() / 1000 - ts;
@@ -48,7 +49,10 @@ export function CommandPalette() {
           <CommandItem className="py-1 text-xs" onSelect={act(() => tab && api.setStatsOpen(tab.id, !tab.stats_open))}>
             Toggle column stats<CommandShortcut>Cmd+I</CommandShortcut>
           </CommandItem>
-          <CommandItem className="py-1 text-xs" onSelect={act(() => void setTimeout(focusSchemaFilter, 50))}>
+          <CommandItem className="py-1 text-xs" onSelect={act(toggleSidebar)}>
+            Toggle sidebar<CommandShortcut>Cmd+B</CommandShortcut>
+          </CommandItem>
+          <CommandItem className="py-1 text-xs" onSelect={act(() => { expandSidebar(); setTimeout(focusSchemaFilter, 50); })}>
             Filter schema<CommandShortcut>Cmd+P</CommandShortcut>
           </CommandItem>
           {(["system", "light", "dark"] as const).map((t) => (

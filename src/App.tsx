@@ -17,6 +17,7 @@ import { useDensity } from "@/lib/density";
 import { useLayout } from "@/lib/layout";
 import { sqlString } from "@/lib/sql";
 import { applyWindowTheme, useThemePref } from "@/lib/theme";
+import { expandSidebar, sidebarRef, toggleSidebar } from "@/lib/sidebar";
 
 /** Match a CodeMirror-style key spec such as "Mod-k" or "Shift-Mod-Enter". */
 function matches(e: KeyboardEvent, spec: string): boolean {
@@ -75,9 +76,13 @@ function useGlobalKeys() {
       } else if (k === "w" && !e.shiftKey) {
         e.preventDefault();
         if (tab) void api.closeTab(tab.id);
+      } else if (k === "b" && !e.shiftKey) {
+        e.preventDefault();
+        toggleSidebar();
       } else if (k === "p" && !e.shiftKey) {
         e.preventDefault();
-        focusSchemaFilter();
+        expandSidebar();
+        requestAnimationFrame(focusSchemaFilter);
       } else if (k === "i" && !e.shiftKey) {
         e.preventDefault();
         if (tab) void api.setStatsOpen(tab.id, !tab.stats_open);
@@ -130,7 +135,7 @@ export default function App() {
         <TrustBanner />
         <div className="min-h-0 flex-1">
           <ResizablePanelGroup orientation="horizontal" defaultLayout={outer.initial} onLayoutChanged={outer.save}>
-            <ResizablePanel id="sidebar" defaultSize="17" minSize={120} collapsible collapsedSize={0}>
+            <ResizablePanel id="sidebar" panelRef={sidebarRef} defaultSize="17" minSize={120} collapsible collapsedSize={0}>
               <StatsDock top={<Sidebar />} />
             </ResizablePanel>
             <ResizableHandle />

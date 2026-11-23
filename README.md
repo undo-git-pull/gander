@@ -103,7 +103,7 @@ Test the `.dmg`, since that is what gets shipped. The steps below install it int
    - The copy buttons on cells and rows paste the right text. `Cmd+C` copies the selection.
    - Column stats at the bottom left start collapsed and fill in when opened. Clicking a column group scrolls the grid to that column.
    - `Cmd+T`, `Cmd+W`, `Cmd+1`-`9` and `Cmd+Shift+[` / `]` work on tabs, and `Cmd+W` closes a tab, not the window.
-   - `Cmd+K` opens the palette with history, `Cmd+P` focuses the schema filter, and `Cmd+I` toggles the stats.
+   - `Cmd+K` opens the palette with history, `Cmd+P` focuses the schema filter, `Cmd+B` toggles the sidebar, and `Cmd+I` toggles the stats.
    - Open DuckDB file... in the source menu opens a `.duckdb` file. The schema tree fills in, and the filter matches `ord am` style terms.
    - Dropping a `.parquet`, `.csv` or `.jsonl` file on the window opens it in a new tab.
    - Quit and relaunch: the tabs and their text come back.

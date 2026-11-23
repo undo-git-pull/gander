@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Check, ChevronDown, Command, Database, FileText, FolderOpen, HardDrive, Monitor, Moon, Play, Square, Sun } from "lucide-react";
+import { Check, ChevronDown, Command, Database, FileText, FolderOpen, HardDrive, Monitor, Moon, PanelLeft, Play, Square, Sun } from "lucide-react";
 import { api, type SourceSpec } from "@/lib/api";
 import { useStore } from "@/store";
 import {
@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { setThemePref, THEME_LABEL, useThemePref, type ThemePref } from "@/lib/theme";
+import { toggleSidebar } from "@/lib/sidebar";
 
 export async function openDuckdbFile() {
   const path = await open({ multiple: false, filters: [{ name: "DuckDB", extensions: ["duckdb", "db", "ddb"] }] });
@@ -75,6 +76,9 @@ export function Toolbar() {
 
   return (
     <div className="flex h-[var(--bar-h)] shrink-0 items-center gap-0.5 border-b px-1">
+      <TBtn tip="Toggle sidebar (Cmd+B)" onClick={toggleSidebar}>
+        <PanelLeft className="size-3.5" />
+      </TBtn>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
