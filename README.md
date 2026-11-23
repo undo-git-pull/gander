@@ -6,6 +6,8 @@ A compact DuckDB data viewer built with Tauri v2, React and shadcn/ui. Type SQL 
 
 ## Develop
 
+You need Rust 1.85 or later (the crate uses the 2024 edition), Node with pnpm, and Python 3 for the CLI.
+
 ```
 pnpm install
 pnpm tauri dev                 # app with hot reload
@@ -36,7 +38,7 @@ CI=true pnpm tauri build
 This writes:
 
 - `src-tauri/target/release/bundle/macos/Gander.app`
-- `src-tauri/target/release/bundle/dmg/Gander_0.1.0_aarch64.dmg`
+- `src-tauri/target/release/bundle/dmg/Gander_<version>_<arch>.dmg`, for example `Gander_0.1.0_aarch64.dmg`
 
 `CI=true` makes the disk image script skip the Finder window layout. Without it the script drives Finder through AppleScript, which times out in a terminal or agent session and fails the build after the `.app` is already made.
 
@@ -48,11 +50,11 @@ The app is ad hoc signed, with no Developer ID and no notarization. A copy built
 
 Test the `.dmg`, since that is what gets shipped. The steps below install it into a temporary folder and point Gander at temporary config and state directories, so your real `~/.config/gander`, `~/.local/state/gander` and installed copy are left alone. The config sets `port = 0` because a Gander that is already running holds port 7420; the release would then start without its API and the CLI checks would fail.
 
-1. From the repository root, install from the disk image into a scratch folder:
+1. From the repository root, install from the disk image into a scratch folder. The glob assumes the `dmg` folder holds one image; delete older ones first.
 
    ```
    T=$(mktemp -d)
-   hdiutil attach -nobrowse -quiet -mountpoint "$T/mnt" src-tauri/target/release/bundle/dmg/Gander_0.1.0_aarch64.dmg
+   hdiutil attach -nobrowse -quiet -mountpoint "$T/mnt" src-tauri/target/release/bundle/dmg/Gander_*.dmg
    cp -R "$T/mnt/Gander.app" "$T/" && hdiutil detach -quiet "$T/mnt"
    ```
 
@@ -70,7 +72,7 @@ Test the `.dmg`, since that is what gets shipped. The steps below install it int
    printf 'name,age\nann,31\nbo,42\n' > "$T/ws/people.csv"
    ```
 
-3. Start the release build. Keep this terminal open; closing the window ends the test.
+3. Start the release build in the background. Run the remaining steps in this same terminal, because the `GANDER_*` variables exist only here. Closing the terminal or quitting Gander ends the test.
 
    ```
    export GANDER_CONFIG_DIR="$T/cfg" GANDER_STATE_DIR="$T/state"
@@ -134,14 +136,17 @@ This skips the check that the disk image mounts and contains the app, so test th
 | `~/.local/state/gander/server.json` | API port, pid and per-launch API key while the app runs |
 | `~/.local/state/gander/trusted_workspaces.json` | Workspace configs you approved |
 
-`GANDER_CONFIG_DIR` and `GANDER_STATE_DIR` override the two base directories.
+The app and the CLI resolve the two base directories the same way. For config, `GANDER_CONFIG_DIR` comes first, then `$XDG_CONFIG_HOME/gander`, then `~/.config/gander`. For state, `GANDER_STATE_DIR` comes first, then `$XDG_STATE_HOME/gander`, then `~/.local/state/gander`.
 
 ## Agent skill
 
 `skill/gander/` holds `SKILL.md` and `scripts/gander.py`. Install it by linking the folder:
 
 ```
+mkdir -p ~/.claude/skills
 ln -s "$PWD/skill/gander" ~/.claude/skills/gander
 ```
+
+The API listens on 127.0.0.1 at the port set by `[server] port` in the global config. The default is 7420, and `0` picks a free port. The CLI never reads `config.toml`. It reads `server.json`, which the app writes with the port it actually bound, so a custom port or `port = 0` needs no CLI setup. If `server.json` is missing, the CLI falls back to the `GANDER_URL` environment variable. While the file exists, `GANDER_URL` is ignored.
 
 The API always requires a key. Without one in the config, Gander makes a new key each launch and writes it to `server.json`, where the CLI picks it up. If the config sets a key, export it as `GANDER_API_KEY` for the CLI. Apps launched from Finder do not inherit shell environment variables, so `api_key_env` only works when Gander is started from a shell; use `api_key` otherwise.
