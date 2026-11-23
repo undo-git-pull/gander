@@ -41,7 +41,7 @@ function charWidth(fontSize: number): number {
   measureCanvas ??= document.createElement("canvas");
   const ctx = measureCanvas.getContext("2d");
   if (!ctx) return fontSize * 0.6;
-  ctx.font = `${fontSize}px ui-monospace, "SF Mono", Menlo, monospace`;
+  ctx.font = `${fontSize}px Menlo, Monaco, Consolas, monospace`;
   return ctx.measureText("0000000000").width / 10;
 }
 
