@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B4C7E"/>
+      <stop offset="1" stop-color="#14233B"/>
+    </linearGradient>
+    <linearGradient id="feather" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DCE3EC"/>
+    </linearGradient>
+    <linearGradient id="beak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFB341"/>
+      <stop offset="1" stop-color="#F08A16"/>
+    </linearGradient>
+    <clipPath id="tile">
+      <rect x="100" y="100" width="824" height="824" rx="185"/>
+    </clipPath>
+  </defs>
+
+  <!-- macOS-style tile with a faint table grid -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g clip-path="url(#tile)" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="6">
+    <path d="M100 300H924M100 480H924M100 660H924M100 840H924"/>
+    <path d="M300 100V924M520 100V924M740 100V924"/>
+  </g>
+
+  <g clip-path="url(#tile)">
+    <!-- head and neck -->
+    <path fill="url(#feather)" d="
+      M 318 940
+      C 330 800 400 700 412 600
+      C 422 520 398 460 412 392
+      C 430 296 520 246 606 252
+      C 680 258 724 306 728 362
+      L 724 436
+      C 700 470 650 486 606 492
+      C 574 556 584 640 616 724
+      C 646 800 664 870 690 940
+      Z"/>
+    <!-- shadow along the back of the neck -->
+    <path fill="#B9C5D4" fill-opacity="0.4" d="
+      M 318 940
+      C 330 800 400 700 412 600
+      C 422 520 398 460 412 392
+      C 418 360 430 334 446 312
+      C 436 360 444 430 452 500
+      C 462 600 420 720 420 940
+      Z"/>
+    <!-- beak knob -->
+    <ellipse cx="712" cy="314" rx="30" ry="26" fill="#E8780F"/>
+    <!-- beak -->
+    <path fill="url(#beak)" d="
+      M 700 318
+      C 770 322 840 360 880 408
+      C 848 440 778 456 708 448
+      C 714 404 712 360 700 318 Z"/>
+    <path fill="none" stroke="#C9650A" stroke-width="9" stroke-linecap="round" d="M 716 404 C 770 408 822 412 864 412"/>
+    <circle cx="842" cy="386" r="7" fill="#C9650A"/>
+    <!-- eye -->
+    <circle cx="628" cy="328" r="22" fill="#14233B"/>
+    <circle cx="636" cy="320" r="7" fill="#FFFFFF"/>
+  </g>
+</svg>
