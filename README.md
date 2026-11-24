@@ -4,6 +4,8 @@
 
 A compact DuckDB data viewer built with Tauri v2, React and shadcn/ui. Type SQL in tabs, browse results in a dense grid, and let an agent read and drive the active tab through a localhost API. How it works, including the API, config files and the agent skill, is described in [`design.md`](design.md).
 
+![Gander showing a query on a DuckDB table, with the schema tree, column stats, results grid and a JSON cell viewer](assets/screenshot1.png)
+
 ## Develop
 
 You need Rust 1.85 or later (the crate uses the 2024 edition), Node with pnpm, and Python 3 for the CLI.
