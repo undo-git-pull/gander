@@ -167,7 +167,6 @@ export function Toolbar() {
             >
               <span className={cn("size-1.5 rounded-full", apiStatus?.running ? "bg-emerald-500" : "bg-muted-foreground/50")} />
               {apiStatus?.running ? `api :${apiStatus.port}` : "api off"}
-              {apiStatus?.auth_required && " key"}
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-80 text-xs">
