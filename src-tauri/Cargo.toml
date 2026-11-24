@@ -2,7 +2,7 @@
 name = "gander"
 version = "0.1.0"
 description = "Compact DuckDB data viewer built with Tauri, with a localhost API so agents can read and drive queries"
-authors = ["you"]
+authors = ["Raymond Lee"]
 edition = "2024"
 license = "MIT"
 
