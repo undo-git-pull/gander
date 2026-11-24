@@ -2,7 +2,7 @@
 //! source and config. The Tauri commands and the HTTP API both call into it.
 
 use crate::config::{self, Config, ConfigError, WorkspaceTrust};
-use crate::db::{self, wrap, wrap::SortSpec, QueryResult, SourceInfo, SourceSpec};
+use crate::db::{self, QueryResult, SourceInfo, SourceSpec, wrap, wrap::SortSpec};
 use crate::paths;
 use duckdb::Connection;
 use parking_lot::Mutex;
@@ -50,10 +50,21 @@ pub struct TabRef {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
-    TabChanged { tab: TabRef },
-    SourceChanged { source: SourceInfo },
-    QueryChanged { tab: TabRef, origin: Origin },
-    RunStarted { tab: TabRef, seq: u64, origin: Origin },
+    TabChanged {
+        tab: TabRef,
+    },
+    SourceChanged {
+        source: SourceInfo,
+    },
+    QueryChanged {
+        tab: TabRef,
+        origin: Origin,
+    },
+    RunStarted {
+        tab: TabRef,
+        seq: u64,
+        origin: Origin,
+    },
     RunFinished {
         tab: TabRef,
         seq: u64,
@@ -62,9 +73,16 @@ pub enum Event {
         row_count: Option<usize>,
         truncated: bool,
     },
-    StatsFinished { tab: TabRef, seq: u64, status: String, error: Option<String> },
+    StatsFinished {
+        tab: TabRef,
+        seq: u64,
+        status: String,
+        error: Option<String>,
+    },
     ConfigReloaded,
-    ConfigError { errors: Vec<ConfigError> },
+    ConfigError {
+        errors: Vec<ConfigError>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -75,7 +93,10 @@ pub struct CoreError {
 
 impl CoreError {
     pub fn new(code: &'static str, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 }
 
@@ -100,7 +121,11 @@ pub struct TabConn {
 impl TabConn {
     fn new(conn: Connection, generation: u64) -> Self {
         let interrupt = conn.interrupt_handle();
-        Self { conn: Mutex::new(conn), interrupt, generation }
+        Self {
+            conn: Mutex::new(conn),
+            interrupt,
+            generation,
+        }
     }
 }
 
@@ -179,14 +204,24 @@ impl Tab {
             run_seq: 0,
             last_change: Origin::Restore,
             stats_open: false,
-            stats: StatsState { status: RunStatus::Idle, seq: 0, key: None, result: None, error: None, version: 0 },
+            stats: StatsState {
+                status: RunStatus::Idle,
+                seq: 0,
+                key: None,
+                result: None,
+                error: None,
+                version: 0,
+            },
             selection: None,
             conn: None,
             side_conn: None,
         }
     }
     fn tab_ref(&self) -> TabRef {
-        TabRef { id: self.id.clone(), title: self.title.clone() }
+        TabRef {
+            id: self.id.clone(),
+            title: self.title.clone(),
+        }
     }
 }
 
@@ -206,14 +241,34 @@ pub fn default_title(sql: &str) -> Option<String> {
             } else if let Some(q) = tok.strip_prefix('"') {
                 q.split('"').next().unwrap_or("").to_string()
             } else {
-                tok.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.').collect()
+                tok.chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
+                    .collect()
             };
             if !name.is_empty() {
-                let ext = Path::new(&name).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+                let ext = Path::new(&name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
                 let is_file = name.contains('/')
-                    || matches!(ext.as_str(), "parquet" | "csv" | "tsv" | "json" | "jsonl" | "ndjson" | "duckdb" | "gz" | "zst");
+                    || matches!(
+                        ext.as_str(),
+                        "parquet"
+                            | "csv"
+                            | "tsv"
+                            | "json"
+                            | "jsonl"
+                            | "ndjson"
+                            | "duckdb"
+                            | "gz"
+                            | "zst"
+                    );
                 let t = if is_file {
-                    Path::new(&name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or(name.clone())
+                    Path::new(&name)
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or(name.clone())
                 } else {
                     // qualified name: keep the last part
                     name.rsplit('.').next().unwrap_or(&name).to_string()
@@ -350,10 +405,16 @@ struct Inner {
 
 impl Inner {
     fn tab(&self, id: &str) -> Result<&Tab, CoreError> {
-        self.tabs.iter().find(|t| t.id == id).ok_or_else(|| CoreError::new("not_found", format!("no tab {id}")))
+        self.tabs
+            .iter()
+            .find(|t| t.id == id)
+            .ok_or_else(|| CoreError::new("not_found", format!("no tab {id}")))
     }
     fn tab_mut(&mut self, id: &str) -> Result<&mut Tab, CoreError> {
-        self.tabs.iter_mut().find(|t| t.id == id).ok_or_else(|| CoreError::new("not_found", format!("no tab {id}")))
+        self.tabs
+            .iter_mut()
+            .find(|t| t.id == id)
+            .ok_or_else(|| CoreError::new("not_found", format!("no tab {id}")))
     }
     fn effective_limit(&self, tab: &Tab) -> usize {
         tab.limit.unwrap_or(self.config.query.limit)
@@ -367,7 +428,11 @@ impl Inner {
             sql: t.sql.clone(),
             sql_rev: t.sql_rev,
             sql_origin: t.sql_origin,
-            dirty: t.ran_text.as_deref().map(|r| r != t.sql).unwrap_or(!t.sql.trim().is_empty()),
+            dirty: t
+                .ran_text
+                .as_deref()
+                .map(|r| r != t.sql)
+                .unwrap_or(!t.sql.trim().is_empty()),
             status: t.status,
             error: t.error.clone(),
             error_code: t.error_code.clone(),
@@ -402,17 +467,20 @@ impl Inner {
         let generation = self.generation;
         let source = self.source.clone();
         let tab = self.tab_mut(id)?;
-        let slot = if side { &mut tab.side_conn } else { &mut tab.conn };
+        let slot = if side {
+            &mut tab.side_conn
+        } else {
+            &mut tab.conn
+        };
         if let Some(c) = slot {
             if c.generation == generation {
                 return Ok(c.clone());
             }
         }
-        let conn = source
-            .conn
-            .lock()
-            .try_clone()
-            .map_err(|e| CoreError::new("source_error", format!("cannot open connection: {e}")))?;
+        let conn =
+            source.conn.lock().try_clone().map_err(|e| {
+                CoreError::new("source_error", format!("cannot open connection: {e}"))
+            })?;
         let c = Arc::new(TabConn::new(conn, generation));
         *slot = Some(c.clone());
         Ok(c)
@@ -448,7 +516,10 @@ pub struct CoreOptions {
 }
 
 fn read_json<T: for<'de> Deserialize<'de> + Default>(p: &Path) -> T {
-    std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    std::fs::read_to_string(p)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 fn random_key() -> String {
@@ -489,14 +560,23 @@ impl Core {
             Ok(o) => o,
             Err(e) => {
                 source_error = Some(e.to_string());
-                db::open_source(&SourceSpec::Memory, &config, ws.as_deref()).expect("in-memory duckdb")
+                db::open_source(&SourceSpec::Memory, &config, ws.as_deref())
+                    .expect("in-memory duckdb")
             }
         };
 
-        let mut app_state: AppStateFile = if opts.ephemeral { Default::default() } else { read_json(&paths::state_file()) };
+        let mut app_state: AppStateFile = if opts.ephemeral {
+            Default::default()
+        } else {
+            read_json(&paths::state_file())
+        };
         app_state.last_workspace = ws.as_ref().map(|p| p.display().to_string());
 
-        let persisted: PersistedTabs = if opts.ephemeral { Default::default() } else { read_json(&paths::tabs_file(ws.as_deref())) };
+        let persisted: PersistedTabs = if opts.ephemeral {
+            Default::default()
+        } else {
+            read_json(&paths::tabs_file(ws.as_deref()))
+        };
         let mut tabs: Vec<Tab> = persisted
             .tabs
             .into_iter()
@@ -517,16 +597,28 @@ impl Core {
             tabs.push(Tab::new(format!("t{next_id}"), String::new()));
             next_id += 1;
         }
-        let active = persisted.active.filter(|a| tabs.iter().any(|t| &t.id == a)).unwrap_or_else(|| tabs[0].id.clone());
+        let active = persisted
+            .active
+            .filter(|a| tabs.iter().any(|t| &t.id == a))
+            .unwrap_or_else(|| tabs[0].id.clone());
 
         let (events, _) = broadcast::channel(256);
         let inner = Inner {
-            api: ApiStatus { enabled: config.server.enabled, running: false, port: None, auth_required: true, error: None },
+            api: ApiStatus {
+                enabled: config.server.enabled,
+                running: false,
+                port: None,
+                auth_required: true,
+                error: None,
+            },
             config,
             config_errors: loaded.errors,
             trust: loaded.trust,
             workspace: ws.clone(),
-            source: Arc::new(SourceState { info: opened.info, conn: Mutex::new(opened.conn) }),
+            source: Arc::new(SourceState {
+                info: opened.info,
+                conn: Mutex::new(opened.conn),
+            }),
             source_error,
             generation: 1,
             tabs,
@@ -593,7 +685,10 @@ impl Core {
 
     fn emit_tabs(&self, inner: &Inner) {
         let tabs: Vec<TabSummary> = inner.tabs.iter().map(|t| inner.summary(t)).collect();
-        self.emit_ui("tabs", &serde_json::json!({ "tabs": tabs, "active": inner.active }));
+        self.emit_ui(
+            "tabs",
+            &serde_json::json!({ "tabs": tabs, "active": inner.active }),
+        );
     }
 
     fn emit_status(&self, inner: &Inner) {
@@ -617,12 +712,19 @@ impl Core {
             config_errors: inner.config_errors.clone(),
             source: inner.source.info.clone(),
             source_error: inner.source_error.clone(),
-            connections: inner.config.connections.iter().map(|c| c.name.clone()).collect(),
+            connections: inner
+                .config
+                .connections
+                .iter()
+                .map(|c| c.name.clone())
+                .collect(),
             recents: inner.app_state.recents.clone(),
             api: inner.api.clone(),
             workspace: inner.workspace.as_ref().map(|p| p.display().to_string()),
             workspace_trust: inner.trust.clone(),
-            query_file: paths::query_file(inner.workspace.as_deref()).display().to_string(),
+            query_file: paths::query_file(inner.workspace.as_deref())
+                .display()
+                .to_string(),
             config_file: self.global_config.display().to_string(),
         }
     }
@@ -633,7 +735,13 @@ impl Core {
 
     pub fn active_ref(&self) -> TabRef {
         let inner = self.inner.lock();
-        inner.tab(&inner.active).map(|t| t.tab_ref()).unwrap_or(TabRef { id: inner.active.clone(), title: String::new() })
+        inner
+            .tab(&inner.active)
+            .map(|t| t.tab_ref())
+            .unwrap_or(TabRef {
+                id: inner.active.clone(),
+                title: String::new(),
+            })
     }
 
     pub fn tab_summary(&self, id: &str) -> Result<TabSummary, CoreError> {
@@ -651,7 +759,10 @@ impl Core {
 
     /// The key API requests must send: the configured one, else this launch's random key.
     pub fn api_key(&self) -> String {
-        self.config().server.resolved_api_key().unwrap_or_else(|| self.session_key.clone())
+        self.config()
+            .server
+            .resolved_api_key()
+            .unwrap_or_else(|| self.session_key.clone())
     }
 
     /// True when the API uses the random per-launch key, which is then
@@ -678,7 +789,12 @@ impl Core {
         inner.next_id += 1;
         let mut tab = Tab::new(id.clone(), sql.unwrap_or_default());
         tab.last_change = Origin::User;
-        let pos = inner.tabs.iter().position(|t| t.id == inner.active).map(|p| p + 1).unwrap_or(inner.tabs.len());
+        let pos = inner
+            .tabs
+            .iter()
+            .position(|t| t.id == inner.active)
+            .map(|p| p + 1)
+            .unwrap_or(inner.tabs.len());
         inner.tabs.insert(pos, tab);
         if activate {
             inner.active = id.clone();
@@ -698,7 +814,11 @@ impl Core {
 
     pub fn close_tab(&self, id: &str) -> Result<(), CoreError> {
         let mut inner = self.inner.lock();
-        let pos = inner.tabs.iter().position(|t| t.id == id).ok_or_else(|| CoreError::new("not_found", "no such tab"))?;
+        let pos = inner
+            .tabs
+            .iter()
+            .position(|t| t.id == id)
+            .ok_or_else(|| CoreError::new("not_found", "no such tab"))?;
         let tab = inner.tabs.remove(pos);
         for c in [&tab.conn, &tab.side_conn].into_iter().flatten() {
             c.interrupt.interrupt();
@@ -741,7 +861,11 @@ impl Core {
 
     pub fn move_tab(&self, id: &str, to: usize) -> Result<(), CoreError> {
         let mut inner = self.inner.lock();
-        let pos = inner.tabs.iter().position(|t| t.id == id).ok_or_else(|| CoreError::new("not_found", "no such tab"))?;
+        let pos = inner
+            .tabs
+            .iter()
+            .position(|t| t.id == id)
+            .ok_or_else(|| CoreError::new("not_found", "no such tab"))?;
         let t = inner.tabs.remove(pos);
         let to = to.min(inner.tabs.len());
         inner.tabs.insert(to, t);
@@ -870,10 +994,13 @@ impl Core {
                     tab.statement = Some(last);
                 }
                 tab.ran_text = Some(tab.sql.clone());
-                append_history(&sql, match req.origin {
-                    Origin::Agent => "agent",
-                    _ => "user",
-                });
+                append_history(
+                    &sql,
+                    match req.origin {
+                        Origin::Agent => "agent",
+                        _ => "user",
+                    },
+                );
             }
             if req.origin == Origin::Agent {
                 tab.last_change = Origin::Agent;
@@ -883,7 +1010,11 @@ impl Core {
             self.emit_tab(&inner, id);
             (conn, sql, sort, limit, seq, r, timeout)
         };
-        self.broadcast(Event::RunStarted { tab: tab_ref.clone(), seq, origin: req.origin });
+        self.broadcast(Event::RunStarted {
+            tab: tab_ref.clone(),
+            seq,
+            origin: req.origin,
+        });
 
         let core = self.clone();
         let id_owned = id.to_string();
@@ -893,12 +1024,24 @@ impl Core {
         self.rt.spawn(async move {
             let res = tokio::task::spawn_blocking(move || {
                 let guard = conn2.conn.lock();
-                db::run(&guard, db::RunOptions { sql: &sql, last_only, sort: &sort, limit, force })
+                db::run(
+                    &guard,
+                    db::RunOptions {
+                        sql: &sql,
+                        last_only,
+                        sort: &sort,
+                        limit,
+                        force,
+                    },
+                )
             })
             .await;
             let res = match res {
                 Ok(r) => r,
-                Err(e) => Err(db::QueryError { code: "internal", message: e.to_string() }),
+                Err(e) => Err(db::QueryError {
+                    code: "internal",
+                    message: e.to_string(),
+                }),
             };
             core.finish_run(&id_owned, seq, res);
         });
@@ -924,7 +1067,14 @@ impl Core {
         let tab_ref = tab.tab_ref();
         if tab.run_seq != seq {
             drop(inner);
-            self.broadcast(Event::RunFinished { tab: tab_ref, seq, status: "superseded".into(), error: None, row_count: None, truncated: false });
+            self.broadcast(Event::RunFinished {
+                tab: tab_ref,
+                seq,
+                status: "superseded".into(),
+                error: None,
+                row_count: None,
+                truncated: false,
+            });
             return;
         }
         let (status, error, row_count, truncated) = match res {
@@ -950,7 +1100,11 @@ impl Core {
             }
             Err(e) => {
                 tab.status = RunStatus::Error;
-                let msg = if e.code == "interrupted" { "Query interrupted".to_string() } else { e.message.clone() };
+                let msg = if e.code == "interrupted" {
+                    "Query interrupted".to_string()
+                } else {
+                    e.message.clone()
+                };
                 tab.error = Some(msg.clone());
                 tab.error_code = Some(e.code.to_string());
                 ("error".to_string(), Some(msg), None, false)
@@ -960,7 +1114,14 @@ impl Core {
         inner.mark_tabs_dirty();
         self.emit_tab(&inner, id);
         drop(inner);
-        self.broadcast(Event::RunFinished { tab: tab_ref, seq, status, error, row_count, truncated });
+        self.broadcast(Event::RunFinished {
+            tab: tab_ref,
+            seq,
+            status,
+            error,
+            row_count,
+            truncated,
+        });
         if want_stats {
             let _ = self.start_stats(id);
         }
@@ -980,7 +1141,12 @@ impl Core {
         Ok(())
     }
 
-    pub fn set_sort(self: &Arc<Self>, id: &str, sort: Vec<SortSpec>, origin: Origin) -> Result<Option<u64>, CoreError> {
+    pub fn set_sort(
+        self: &Arc<Self>,
+        id: &str,
+        sort: Vec<SortSpec>,
+        origin: Origin,
+    ) -> Result<Option<u64>, CoreError> {
         let has_stmt = {
             let mut inner = self.inner.lock();
             let tab = inner.tab_mut(id)?;
@@ -988,13 +1154,24 @@ impl Core {
             if origin == Origin::Agent {
                 tab.last_change = Origin::Agent;
             }
-            let has = tab.statement.is_some() && tab.result.as_ref().map(|r| r.wrapped).unwrap_or(false);
+            let has =
+                tab.statement.is_some() && tab.result.as_ref().map(|r| r.wrapped).unwrap_or(false);
             inner.mark_tabs_dirty();
             self.emit_tab(&inner, id);
             has
         };
         if has_stmt {
-            return self.run(id, RunRequest { text: None, origin, force: false, last_only: true }).map(Some);
+            return self
+                .run(
+                    id,
+                    RunRequest {
+                        text: None,
+                        origin,
+                        force: false,
+                        last_only: true,
+                    },
+                )
+                .map(Some);
         }
         Ok(None)
     }
@@ -1012,18 +1189,35 @@ impl Core {
         self.rt.clone()
     }
 
-    pub fn set_limit(self: &Arc<Self>, id: &str, limit: Option<usize>, origin: Origin, force: bool) -> Result<Option<u64>, CoreError> {
+    pub fn set_limit(
+        self: &Arc<Self>,
+        id: &str,
+        limit: Option<usize>,
+        origin: Origin,
+        force: bool,
+    ) -> Result<Option<u64>, CoreError> {
         let has_stmt = {
             let mut inner = self.inner.lock();
             let tab = inner.tab_mut(id)?;
             tab.limit = limit;
-            let has = tab.statement.is_some() && tab.result.as_ref().map(|r| r.wrapped).unwrap_or(false);
+            let has =
+                tab.statement.is_some() && tab.result.as_ref().map(|r| r.wrapped).unwrap_or(false);
             inner.mark_tabs_dirty();
             self.emit_tab(&inner, id);
             has
         };
         if has_stmt {
-            return self.run(id, RunRequest { text: None, origin, force, last_only: true }).map(Some);
+            return self
+                .run(
+                    id,
+                    RunRequest {
+                        text: None,
+                        origin,
+                        force,
+                        last_only: true,
+                    },
+                )
+                .map(Some);
         }
         Ok(None)
     }
@@ -1033,7 +1227,10 @@ impl Core {
             let mut inner = self.inner.lock();
             let conn = inner.conn_for(id, true)?;
             let tab = inner.tab_mut(id)?;
-            let stmt = tab.statement.clone().ok_or_else(|| CoreError::new("no_result", "Run a query first"))?;
+            let stmt = tab
+                .statement
+                .clone()
+                .ok_or_else(|| CoreError::new("no_result", "Run a query first"))?;
             tab.counting = true;
             self.emit_tab(&inner, id);
             (conn, stmt)
@@ -1086,7 +1283,9 @@ impl Core {
             let mut inner = self.inner.lock();
             let generation = inner.generation;
             let t = inner.tab(id)?;
-            let Some(stmt) = t.statement.clone() else { return Ok(None) };
+            let Some(stmt) = t.statement.clone() else {
+                return Ok(None);
+            };
             let wrapped = t.result.as_ref().map(|r| r.wrapped).unwrap_or(false);
             if !wrapped {
                 let tab = inner.tab_mut(id)?;
@@ -1097,7 +1296,9 @@ impl Core {
                 return Ok(None);
             }
             let key = (stmt.clone(), generation);
-            if t.stats.key.as_ref() == Some(&key) && (t.stats.result.is_some() || t.stats.status == RunStatus::Running) {
+            if t.stats.key.as_ref() == Some(&key)
+                && (t.stats.result.is_some() || t.stats.status == RunStatus::Running)
+            {
                 return Ok(None);
             }
             let conn = inner.conn_for(id, true)?;
@@ -1107,7 +1308,12 @@ impl Core {
             tab.stats.key = Some(key);
             tab.stats.error = None;
             tab.stats.version += 1;
-            let r = (conn, wrap::summarize_sql(&stmt), tab.stats.seq, tab.tab_ref());
+            let r = (
+                conn,
+                wrap::summarize_sql(&stmt),
+                tab.stats.seq,
+                tab.tab_ref(),
+            );
             self.emit_tab(&inner, id);
             r
         };
@@ -1116,7 +1322,16 @@ impl Core {
         self.rt.spawn(async move {
             let res = tokio::task::spawn_blocking(move || {
                 let g = conn.conn.lock();
-                db::run(&g, db::RunOptions { sql: &sql, last_only: false, sort: &[], limit: 0, force: true })
+                db::run(
+                    &g,
+                    db::RunOptions {
+                        sql: &sql,
+                        last_only: false,
+                        sort: &[],
+                        limit: 0,
+                        force: true,
+                    },
+                )
             })
             .await;
             let mut inner = core.inner.lock();
@@ -1131,7 +1346,11 @@ impl Core {
                     ("done", None)
                 }
                 Ok(Err(e)) => {
-                    let msg = if e.code == "interrupted" { "Stats interrupted".to_string() } else { e.message };
+                    let msg = if e.code == "interrupted" {
+                        "Stats interrupted".to_string()
+                    } else {
+                        e.message
+                    };
                     tab.stats.error = Some(msg.clone());
                     tab.stats.status = RunStatus::Error;
                     tab.stats.key = None;
@@ -1147,39 +1366,74 @@ impl Core {
             tab.stats.version += 1;
             core.emit_tab(&inner, &id);
             drop(inner);
-            core.broadcast(Event::StatsFinished { tab: tab_ref, seq, status: status.into(), error });
+            core.broadcast(Event::StatsFinished {
+                tab: tab_ref,
+                seq,
+                status: status.into(),
+                error,
+            });
         });
         Ok(Some(seq))
     }
 
     /// Histogram of one column over the tab's last statement. Blocking; runs
     /// on its own connection so it does not wait behind SUMMARIZE.
-    pub fn histogram(&self, id: &str, column: &str, ty: &str) -> Result<(wrap::HistogramKind, QueryResult), CoreError> {
+    pub fn histogram(
+        &self,
+        id: &str,
+        column: &str,
+        ty: &str,
+    ) -> Result<(wrap::HistogramKind, QueryResult), CoreError> {
         let (stmt, source) = {
             let inner = self.inner.lock();
             let t = inner.tab(id)?;
-            let Some(stmt) = t.statement.clone() else { return Err(CoreError::new("no_result", "Run a query first")) };
+            let Some(stmt) = t.statement.clone() else {
+                return Err(CoreError::new("no_result", "Run a query first"));
+            };
             (stmt, inner.source.clone())
         };
-        let conn = source.conn.lock().try_clone().map_err(|e| CoreError::new("source_error", format!("cannot open connection: {e}")))?;
+        let conn =
+            source.conn.lock().try_clone().map_err(|e| {
+                CoreError::new("source_error", format!("cannot open connection: {e}"))
+            })?;
         let kind = wrap::histogram_kind(ty);
         let sql = wrap::histogram_sql(&stmt, column, kind);
-        let r = db::run(&conn, db::RunOptions { sql: &sql, last_only: false, sort: &[], limit: 0, force: true })
-            .map_err(|e| CoreError::new("query_error", e.message))?;
+        let r = db::run(
+            &conn,
+            db::RunOptions {
+                sql: &sql,
+                last_only: false,
+                sort: &[],
+                limit: 0,
+                force: true,
+            },
+        )
+        .map_err(|e| CoreError::new("query_error", e.message))?;
         Ok((kind, r))
     }
 
-    pub fn stats_state(&self, id: &str) -> Result<(RunStatus, Option<Arc<QueryResult>>, Option<String>), CoreError> {
+    pub fn stats_state(
+        &self,
+        id: &str,
+    ) -> Result<(RunStatus, Option<Arc<QueryResult>>, Option<String>), CoreError> {
         let inner = self.inner.lock();
         let t = inner.tab(id)?;
-        Ok((t.stats.status, t.stats.result.clone(), t.stats.error.clone()))
+        Ok((
+            t.stats.status,
+            t.stats.result.clone(),
+            t.stats.error.clone(),
+        ))
     }
 
     // ---- source and catalog ----
 
     pub fn catalog(&self) -> Result<Vec<db::CatalogTable>, CoreError> {
         let source = self.inner.lock().source.clone();
-        let conn = source.conn.lock().try_clone().map_err(|e| CoreError::new("source_error", e.to_string()))?;
+        let conn = source
+            .conn
+            .lock()
+            .try_clone()
+            .map_err(|e| CoreError::new("source_error", e.to_string()))?;
         db::catalog(&conn).map_err(|e| CoreError::new("query_error", e.message))
     }
 
@@ -1189,7 +1443,8 @@ impl Core {
             let inner = self.inner.lock();
             (inner.config.clone(), inner.workspace.clone())
         };
-        let opened = db::open_source(&spec, &config, ws.as_deref()).map_err(|e| CoreError::new("source_error", e.to_string()))?;
+        let opened = db::open_source(&spec, &config, ws.as_deref())
+            .map_err(|e| CoreError::new("source_error", e.to_string()))?;
         self.install_source(opened, None);
         Ok(self.source_info())
     }
@@ -1205,7 +1460,10 @@ impl Core {
             inner.app_state_dirty = true;
         }
         let info = opened.info.clone();
-        inner.source = Arc::new(SourceState { info: opened.info, conn: Mutex::new(opened.conn) });
+        inner.source = Arc::new(SourceState {
+            info: opened.info,
+            conn: Mutex::new(opened.conn),
+        });
         inner.source_error = error;
         for t in inner.tabs.iter_mut() {
             t.conn = None;
@@ -1215,7 +1473,10 @@ impl Core {
             t.stats.status = RunStatus::Idle;
             t.stats.version += 1;
         }
-        self.emit_ui("source", &serde_json::json!({ "source": info, "recents": inner.app_state.recents }));
+        self.emit_ui(
+            "source",
+            &serde_json::json!({ "source": info, "recents": inner.app_state.recents }),
+        );
         self.emit_tabs(&inner);
         self.emit_status(&inner);
         drop(inner);
@@ -1223,12 +1484,17 @@ impl Core {
     }
 
     pub fn history(&self, limit: usize) -> Vec<serde_json::Value> {
-        let Ok(text) = std::fs::read_to_string(paths::history_file()) else { return vec![] };
+        let Ok(text) = std::fs::read_to_string(paths::history_file()) else {
+            return vec![];
+        };
         let mut out: Vec<serde_json::Value> = Vec::new();
         for line in text.lines().rev() {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
                 let sql = v.get("sql").and_then(|s| s.as_str()).unwrap_or("");
-                if out.iter().any(|o| o.get("sql").and_then(|s| s.as_str()) == Some(sql)) {
+                if out
+                    .iter()
+                    .any(|o| o.get("sql").and_then(|s| s.as_str()) == Some(sql))
+                {
                     continue;
                 }
                 out.push(v);
@@ -1264,7 +1530,9 @@ impl Core {
             inner.trust = loaded.trust.clone();
             self.emit_status(&inner);
             drop(inner);
-            self.broadcast(Event::ConfigError { errors: loaded.errors });
+            self.broadcast(Event::ConfigError {
+                errors: loaded.errors,
+            });
             return;
         }
         let new = loaded.config;
@@ -1290,7 +1558,8 @@ impl Core {
         }
         // Approving the workspace config can make its default connection available.
         let source = self.source_info().spec;
-        if matches!(source, SourceSpec::Memory) && old.default_connection != new.default_connection {
+        if matches!(source, SourceSpec::Memory) && old.default_connection != new.default_connection
+        {
             if let Some(name) = new.default_connection.clone() {
                 let core = self.clone();
                 self.rt.spawn_blocking(move || {
@@ -1305,10 +1574,15 @@ impl Core {
             let after = new.connections.iter().find(|c| &c.name == name);
             if before != after {
                 let core = self.clone();
-                let spec = if after.is_some() { spec.clone() } else { SourceSpec::Memory };
+                let spec = if after.is_some() {
+                    spec.clone()
+                } else {
+                    SourceSpec::Memory
+                };
                 self.rt.spawn_blocking(move || {
                     if let Err(e) = core.open_source(spec) {
-                        let fallback = db::open_source(&SourceSpec::Memory, &core.config(), None).expect("memory");
+                        let fallback = db::open_source(&SourceSpec::Memory, &core.config(), None)
+                            .expect("memory");
                         core.install_source(fallback, Some(e.message));
                     }
                 });
@@ -1319,10 +1593,27 @@ impl Core {
             let id = self.active_id();
             let rerun = {
                 let inner = self.inner.lock();
-                inner.tab(&id).map(|t| t.limit.is_none() && t.result.as_ref().map(|r| r.truncated && r.wrapped).unwrap_or(false)).unwrap_or(false)
+                inner
+                    .tab(&id)
+                    .map(|t| {
+                        t.limit.is_none()
+                            && t.result
+                                .as_ref()
+                                .map(|r| r.truncated && r.wrapped)
+                                .unwrap_or(false)
+                    })
+                    .unwrap_or(false)
             };
             if rerun {
-                let _ = self.run(&id, RunRequest { text: None, origin: Origin::File, force: false, last_only: true });
+                let _ = self.run(
+                    &id,
+                    RunRequest {
+                        text: None,
+                        origin: Origin::File,
+                        force: false,
+                        last_only: true,
+                    },
+                );
             }
             let inner = self.inner.lock();
             self.emit_tabs(&inner);
@@ -1331,8 +1622,11 @@ impl Core {
 
     /// Contents and hash of the workspace config, for the approval dialog.
     pub fn workspace_config(&self) -> Result<(String, String, String), CoreError> {
-        let path = self.workspace_config_file().ok_or_else(|| CoreError::new("not_found", "no workspace is open"))?;
-        let text = std::fs::read_to_string(&path).map_err(|e| CoreError::new("not_found", format!("{}: {e}", path.display())))?;
+        let path = self
+            .workspace_config_file()
+            .ok_or_else(|| CoreError::new("not_found", "no workspace is open"))?;
+        let text = std::fs::read_to_string(&path)
+            .map_err(|e| CoreError::new("not_found", format!("{}: {e}", path.display())))?;
         let hash = config::sha256_hex(text.as_bytes());
         Ok((path.display().to_string(), text, hash))
     }
@@ -1342,9 +1636,13 @@ impl Core {
     pub fn trust_workspace_config(self: &Arc<Self>, hash: &str) -> Result<(), CoreError> {
         let (path, _, current) = self.workspace_config()?;
         if current != hash {
-            return Err(CoreError::new("changed", "the workspace config changed after it was shown; review it again"));
+            return Err(CoreError::new(
+                "changed",
+                "the workspace config changed after it was shown; review it again",
+            ));
         }
-        config::set_trusted(Path::new(&path), hash).map_err(|e| CoreError::new("io_error", e.to_string()))?;
+        config::set_trusted(Path::new(&path), hash)
+            .map_err(|e| CoreError::new("io_error", e.to_string()))?;
         self.reload_config();
         Ok(())
     }
@@ -1353,7 +1651,9 @@ impl Core {
 
     fn adopt_query_file_on_start(&self) {
         let path = self.query_file();
-        let Ok(text) = std::fs::read_to_string(&path) else { return };
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return;
+        };
         let id = self.active_id();
         let mut inner = self.inner.lock();
         inner.query_file_hash = Some(paths::fnv1a(text.as_bytes()));
@@ -1375,7 +1675,9 @@ impl Core {
     /// Called by the watcher when `query.sql` changes on disk.
     pub fn on_query_file_changed(&self) {
         let path = self.query_file();
-        let Ok(text) = std::fs::read_to_string(&path) else { return };
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return;
+        };
         let h = paths::fnv1a(text.as_bytes());
         let id = {
             let mut inner = self.inner.lock();
@@ -1395,7 +1697,10 @@ impl Core {
         if let Some(due) = inner.query_file_due {
             if force || now >= due {
                 inner.query_file_due = None;
-                let text = inner.tab(&inner.active).map(|t| t.sql.clone()).unwrap_or_default();
+                let text = inner
+                    .tab(&inner.active)
+                    .map(|t| t.sql.clone())
+                    .unwrap_or_default();
                 let h = paths::fnv1a(text.as_bytes());
                 if inner.query_file_hash != Some(h) {
                     inner.query_file_hash = Some(h);
@@ -1422,8 +1727,16 @@ impl Core {
                             sort: t.sort.clone(),
                             limit: t.limit,
                             stats_open: t.stats_open,
-                            last_row_count: t.result.as_ref().map(|r| r.rows.len()).or(t.last_row_count),
-                            truncated: t.result.as_ref().map(|r| r.truncated).unwrap_or(t.last_truncated),
+                            last_row_count: t
+                                .result
+                                .as_ref()
+                                .map(|r| r.rows.len())
+                                .or(t.last_row_count),
+                            truncated: t
+                                .result
+                                .as_ref()
+                                .map(|r| r.truncated)
+                                .unwrap_or(t.last_truncated),
                         })
                         .collect(),
                 };
@@ -1454,11 +1767,18 @@ impl Core {
 
     /// Wait until a run with `seq` on tab `id` finishes. The receiver must be
     /// subscribed before the run starts.
-    pub async fn wait_run(rx: &mut broadcast::Receiver<Event>, id: &str, seq: u64, timeout: Duration) -> bool {
+    pub async fn wait_run(
+        rx: &mut broadcast::Receiver<Event>,
+        id: &str,
+        seq: u64,
+        timeout: Duration,
+    ) -> bool {
         let fut = async {
             loop {
                 match rx.recv().await {
-                    Ok(Event::RunFinished { tab, seq: s, .. }) if tab.id == id && s >= seq => return true,
+                    Ok(Event::RunFinished { tab, seq: s, .. }) if tab.id == id && s >= seq => {
+                        return true;
+                    }
                     Ok(_) => {}
                     Err(broadcast::error::RecvError::Lagged(_)) => {}
                     Err(_) => return false,
@@ -1475,9 +1795,16 @@ fn append_history(sql: &str, origin: &str) {
     if let Some(p) = path.parent() {
         let _ = std::fs::create_dir_all(p);
     }
-    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
     let line = serde_json::json!({ "ts": ts, "sql": sql, "origin": origin });
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
         let _ = writeln!(f, "{line}");
     }
 }
@@ -1488,10 +1815,22 @@ mod tests {
 
     #[test]
     fn titles() {
-        assert_eq!(default_title("select * from orders o").as_deref(), Some("orders"));
-        assert_eq!(default_title("FROM 'data/events.parquet'").as_deref(), Some("events"));
-        assert_eq!(default_title("select 1; from main.users").as_deref(), Some("users"));
+        assert_eq!(
+            default_title("select * from orders o").as_deref(),
+            Some("orders")
+        );
+        assert_eq!(
+            default_title("FROM 'data/events.parquet'").as_deref(),
+            Some("events")
+        );
+        assert_eq!(
+            default_title("select 1; from main.users").as_deref(),
+            Some("users")
+        );
         assert_eq!(default_title("select 1"), None);
-        assert_eq!(default_title("select fromage from cheese").as_deref(), Some("cheese"));
+        assert_eq!(
+            default_title("select fromage from cheese").as_deref(),
+            Some("cheese")
+        );
     }
 }

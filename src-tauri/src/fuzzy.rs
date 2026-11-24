@@ -47,13 +47,22 @@ mod tests {
             schema: "main".into(),
             name: name.into(),
             kind: "table".into(),
-            columns: cols.iter().map(|c| CatalogColumn { name: c.to_string(), ty: "INTEGER".into() }).collect(),
+            columns: cols
+                .iter()
+                .map(|c| CatalogColumn {
+                    name: c.to_string(),
+                    ty: "INTEGER".into(),
+                })
+                .collect(),
         }
     }
 
     #[test]
     fn matches_table_and_column_terms() {
-        let r = filter_catalog(vec![t("orders", &["id", "amount"]), t("users", &["id", "name"])], "ord am");
+        let r = filter_catalog(
+            vec![t("orders", &["id", "amount"]), t("users", &["id", "name"])],
+            "ord am",
+        );
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].name, "orders");
         assert_eq!(r[0].columns.len(), 1);
@@ -62,7 +71,10 @@ mod tests {
 
     #[test]
     fn table_match_keeps_all_columns() {
-        let r = filter_catalog(vec![t("orders", &["id", "amount"]), t("users", &["id"])], "users");
+        let r = filter_catalog(
+            vec![t("orders", &["id", "amount"]), t("users", &["id"])],
+            "users",
+        );
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].columns.len(), 1);
     }

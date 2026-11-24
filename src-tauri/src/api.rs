@@ -1,11 +1,11 @@
 //! Localhost HTTP API. Every endpoint acts on the active tab only.
 
 use crate::core::{Core, CoreError, Event, Origin, RunRequest, RunStatus, TabRef};
-use crate::db::{wrap::SortSpec, QueryResult};
+use crate::db::{QueryResult, wrap::SortSpec};
 use crate::paths;
 use axum::body::Body;
 use axum::extract::{Query, Request, State};
-use axum::http::{header, HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::sse::{KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
@@ -13,7 +13,7 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use futures::StreamExt;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 use subtle::ConstantTimeEq;
@@ -52,7 +52,11 @@ impl From<CoreError> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.0, Json(json!({ "error": { "code": self.1, "message": self.2 } }))).into_response()
+        (
+            self.0,
+            Json(json!({ "error": { "code": self.1, "message": self.2 } })),
+        )
+            .into_response()
     }
 }
 
@@ -88,7 +92,11 @@ pub fn apply_config(core: &Arc<Core>) {
         Ok((v4, v6)) => {
             let port = v4.local_addr().map(|a| a.port()).unwrap_or(cfg.port);
             let (tx, rx) = watch::channel(false);
-            *slot = Some(ServerHandle { shutdown: tx, port, configured_port: cfg.port });
+            *slot = Some(ServerHandle {
+                shutdown: tx,
+                port,
+                configured_port: cfg.port,
+            });
             drop(slot);
             serve(core.clone(), port, v4, v6, rx);
             status.running = true;
@@ -124,7 +132,12 @@ fn write_server_file(port: u16, core: &Core) {
     if core.api_key_is_generated() {
         body["api_key"] = json!(core.api_key());
     }
-    let _ = paths::write_private(&paths::server_file(), serde_json::to_string_pretty(&body).unwrap_or_default().as_bytes());
+    let _ = paths::write_private(
+        &paths::server_file(),
+        serde_json::to_string_pretty(&body)
+            .unwrap_or_default()
+            .as_bytes(),
+    );
 }
 
 type Listeners = (std::net::TcpListener, Option<std::net::TcpListener>);
@@ -141,14 +154,22 @@ fn bind(port: u16) -> std::io::Result<Listeners> {
     Ok((v4, v6))
 }
 
-fn serve(core: Arc<Core>, port: u16, v4: std::net::TcpListener, v6: Option<std::net::TcpListener>, rx: watch::Receiver<bool>) {
+fn serve(
+    core: Arc<Core>,
+    port: u16,
+    v4: std::net::TcpListener,
+    v6: Option<std::net::TcpListener>,
+    rx: watch::Receiver<bool>,
+) {
     let router = router(core.clone(), port);
     let rt = core.rt_handle();
     for l in std::iter::once(v4).chain(v6) {
         let router = router.clone();
         let mut rx = rx.clone();
         rt.spawn(async move {
-            let Ok(listener) = tokio::net::TcpListener::from_std(l) else { return };
+            let Ok(listener) = tokio::net::TcpListener::from_std(l) else {
+                return;
+            };
             let _ = axum::serve(listener, router)
                 .with_graceful_shutdown(async move {
                     let _ = rx.wait_for(|v| *v).await;
@@ -174,7 +195,9 @@ pub fn router(core: Arc<Core>, port: u16) -> Router {
         .route("/stats", get(stats))
         .route("/catalog", get(catalog))
         .route("/events", get(events))
-        .fallback(|| async { ApiError::new(StatusCode::NOT_FOUND, "not_found", "unknown endpoint") })
+        .fallback(|| async {
+            ApiError::new(StatusCode::NOT_FOUND, "not_found", "unknown endpoint")
+        })
         .layer(middleware::from_fn_with_state(ctx.clone(), guard))
         .with_state(ctx)
 }
@@ -182,12 +205,22 @@ pub fn router(core: Arc<Core>, port: u16) -> Router {
 pub fn host_allowed(host: Option<&str>, port: u16) -> bool {
     let Some(h) = host else { return false };
     let h = h.to_ascii_lowercase();
-    [format!("localhost:{port}"), format!("127.0.0.1:{port}"), format!("[::1]:{port}")].contains(&h)
+    [
+        format!("localhost:{port}"),
+        format!("127.0.0.1:{port}"),
+        format!("[::1]:{port}"),
+    ]
+    .contains(&h)
 }
 
 pub fn key_matches(expected: &str, header: Option<&str>) -> bool {
     let Some(h) = header else { return false };
-    let Some(token) = h.strip_prefix("Bearer ").or_else(|| h.strip_prefix("bearer ")) else { return false };
+    let Some(token) = h
+        .strip_prefix("Bearer ")
+        .or_else(|| h.strip_prefix("bearer "))
+    else {
+        return false;
+    };
     let a = token.trim().as_bytes();
     let b = expected.as_bytes();
     a.len() == b.len() && bool::from(a.ct_eq(b))
@@ -197,15 +230,32 @@ async fn guard(State(ctx): State<AppCtx>, req: Request, next: Next) -> Response 
     let headers = req.headers();
     let host = headers.get(header::HOST).and_then(|h| h.to_str().ok());
     if !host_allowed(host, ctx.port) {
-        return ApiError::new(StatusCode::FORBIDDEN, "forbidden_host", "Host header must be localhost with the API port").into_response();
+        return ApiError::new(
+            StatusCode::FORBIDDEN,
+            "forbidden_host",
+            "Host header must be localhost with the API port",
+        )
+        .into_response();
     }
     if headers.contains_key(header::ORIGIN) {
-        return ApiError::new(StatusCode::FORBIDDEN, "forbidden_origin", "browser requests are not accepted").into_response();
+        return ApiError::new(
+            StatusCode::FORBIDDEN,
+            "forbidden_origin",
+            "browser requests are not accepted",
+        )
+        .into_response();
     }
     if req.uri().path() != "/health" {
-        let auth = headers.get(header::AUTHORIZATION).and_then(|h| h.to_str().ok());
+        let auth = headers
+            .get(header::AUTHORIZATION)
+            .and_then(|h| h.to_str().ok());
         if !key_matches(&ctx.core.api_key(), auth) {
-            return ApiError::new(StatusCode::UNAUTHORIZED, "unauthorized", "missing or wrong API key").into_response();
+            return ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "missing or wrong API key",
+            )
+            .into_response();
         }
     }
     next.run(req).await
@@ -266,7 +316,10 @@ struct PutQuery {
 async fn put_query(State(ctx): State<AppCtx>, Json(body): Json<PutQuery>) -> ApiResult {
     let t = ctx.core.active_ref();
     ctx.core.set_sql(&t.id, body.sql.clone(), Origin::Agent)?;
-    let t = TabRef { title: ctx.core.tab_summary(&t.id)?.title, ..t };
+    let t = TabRef {
+        title: ctx.core.tab_summary(&t.id)?.title,
+        ..t
+    };
     if body.run {
         return run_and_wait(&ctx, &t, None, body.rows, body.wait_ms, false).await;
     }
@@ -290,7 +343,10 @@ async fn run(State(ctx): State<AppCtx>, body: Option<Json<RunBody>>) -> ApiResul
         ctx.core.set_sql(&t.id, sql.clone(), Origin::Agent)?;
     }
     // The title may follow the new text.
-    let t = TabRef { title: ctx.core.tab_summary(&t.id)?.title, ..t };
+    let t = TabRef {
+        title: ctx.core.tab_summary(&t.id)?.title,
+        ..t
+    };
     if let Some(l) = body.limit {
         ctx.core.set_tab_limit(&t.id, Some(l))?;
     }
@@ -298,12 +354,27 @@ async fn run(State(ctx): State<AppCtx>, body: Option<Json<RunBody>>) -> ApiResul
 }
 
 /// Start a run on the tab (or use `seq` from a run already started) and wait.
-async fn run_and_wait(ctx: &AppCtx, t: &TabRef, started: Option<(u64, tokio::sync::broadcast::Receiver<Event>)>, rows: Option<usize>, wait_ms: Option<u64>, force: bool) -> ApiResult {
+async fn run_and_wait(
+    ctx: &AppCtx,
+    t: &TabRef,
+    started: Option<(u64, tokio::sync::broadcast::Receiver<Event>)>,
+    rows: Option<usize>,
+    wait_ms: Option<u64>,
+    force: bool,
+) -> ApiResult {
     let (seq, mut rx) = match started {
         Some(s) => s,
         None => {
             let rx = ctx.core.events.subscribe();
-            let seq = ctx.core.run(&t.id, RunRequest { text: None, origin: Origin::Agent, force, last_only: false })?;
+            let seq = ctx.core.run(
+                &t.id,
+                RunRequest {
+                    text: None,
+                    origin: Origin::Agent,
+                    force,
+                    last_only: false,
+                },
+            )?;
             (seq, rx)
         }
     };
@@ -315,7 +386,11 @@ async fn run_and_wait(ctx: &AppCtx, t: &TabRef, started: Option<(u64, tokio::syn
 fn run_response(ctx: &AppCtx, t: &TabRef, finished: bool, rows: Option<usize>) -> ApiResult {
     let s = ctx.core.tab_summary(&t.id)?;
     if !finished || s.status == RunStatus::Running {
-        return Ok((StatusCode::ACCEPTED, Json(json!({ "tab": tab_json(t), "status": "running" }))).into_response());
+        return Ok((
+            StatusCode::ACCEPTED,
+            Json(json!({ "tab": tab_json(t), "status": "running" })),
+        )
+            .into_response());
     }
     if s.status == RunStatus::Error {
         let code = s.error_code.clone().unwrap_or_else(|| "query_error".into());
@@ -401,7 +476,10 @@ fn result_json(r: &QueryResult, offset: usize, n: usize, cols: Option<&[usize]>)
     let cols = cols.unwrap_or(&all);
     let end = (offset + n).min(r.rows.len());
     let start = offset.min(end);
-    let rows: Vec<Vec<Value>> = r.rows[start..end].iter().map(|row| cols.iter().map(|&c| row[c].clone()).collect()).collect();
+    let rows: Vec<Vec<Value>> = r.rows[start..end]
+        .iter()
+        .map(|row| cols.iter().map(|&c| row[c].clone()).collect())
+        .collect();
     json!({
         "columns": cols.iter().map(|&c| &r.columns[c]).collect::<Vec<_>>(),
         "rows": rows,
@@ -431,23 +509,51 @@ fn csv_field(s: &str) -> String {
 }
 
 fn render_text(body: &Value, format: &str) -> String {
-    let cols: Vec<String> = body["columns"].as_array().map(|a| a.iter().map(|c| c["name"].as_str().unwrap_or("").to_string()).collect()).unwrap_or_default();
+    let cols: Vec<String> = body["columns"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|c| c["name"].as_str().unwrap_or("").to_string())
+                .collect()
+        })
+        .unwrap_or_default();
     let rows = body["rows"].as_array().cloned().unwrap_or_default();
     let mut out = String::new();
     if format == "csv" {
-        out.push_str(&cols.iter().map(|c| csv_field(c)).collect::<Vec<_>>().join(","));
+        out.push_str(
+            &cols
+                .iter()
+                .map(|c| csv_field(c))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
         out.push('\n');
         for r in rows {
-            let cells: Vec<String> = r.as_array().map(|a| a.iter().map(|v| csv_field(&cell_text(v, ""))).collect()).unwrap_or_default();
+            let cells: Vec<String> = r
+                .as_array()
+                .map(|a| a.iter().map(|v| csv_field(&cell_text(v, ""))).collect())
+                .unwrap_or_default();
             out.push_str(&cells.join(","));
             out.push('\n');
         }
     } else {
         let esc = |s: String| s.replace('|', "\\|").replace('\n', " ");
-        out.push_str(&format!("| {} |\n", cols.iter().map(|c| esc(c.clone())).collect::<Vec<_>>().join(" | ")));
-        out.push_str(&format!("|{}|\n", cols.iter().map(|_| "---").collect::<Vec<_>>().join("|")));
+        out.push_str(&format!(
+            "| {} |\n",
+            cols.iter()
+                .map(|c| esc(c.clone()))
+                .collect::<Vec<_>>()
+                .join(" | ")
+        ));
+        out.push_str(&format!(
+            "|{}|\n",
+            cols.iter().map(|_| "---").collect::<Vec<_>>().join("|")
+        ));
         for r in rows {
-            let cells: Vec<String> = r.as_array().map(|a| a.iter().map(|v| esc(cell_text(v, "NULL"))).collect()).unwrap_or_default();
+            let cells: Vec<String> = r
+                .as_array()
+                .map(|a| a.iter().map(|v| esc(cell_text(v, "NULL"))).collect())
+                .unwrap_or_default();
             out.push_str(&format!("| {} |\n", cells.join(" | ")));
         }
     }
@@ -459,28 +565,50 @@ fn respond_rows(body: Value, format: Option<&str>) -> ApiResult {
         "json" => Ok(Json(body).into_response()),
         f @ ("csv" | "markdown") => {
             let text = render_text(&body, f);
-            let ct = if f == "csv" { "text/csv; charset=utf-8" } else { "text/markdown; charset=utf-8" };
+            let ct = if f == "csv" {
+                "text/csv; charset=utf-8"
+            } else {
+                "text/markdown; charset=utf-8"
+            };
             let mut resp = Response::new(Body::from(text));
             let h: &mut HeaderMap = resp.headers_mut();
             h.insert(header::CONTENT_TYPE, ct.parse().unwrap());
-            for (k, key) in [("x-gander-result-rows", "result_rows"), ("x-gander-returned-rows", "returned_rows"), ("x-gander-offset", "offset"), ("x-gander-truncated", "truncated"), ("x-gander-limit", "limit")] {
+            for (k, key) in [
+                ("x-gander-result-rows", "result_rows"),
+                ("x-gander-returned-rows", "returned_rows"),
+                ("x-gander-offset", "offset"),
+                ("x-gander-truncated", "truncated"),
+                ("x-gander-limit", "limit"),
+            ] {
                 if let Ok(v) = body[key].to_string().parse() {
                     h.insert(k, v);
                 }
             }
             Ok(resp)
         }
-        other => Err(ApiError::new(StatusCode::BAD_REQUEST, "bad_request", format!("unknown format {other}; use json, csv or markdown"))),
+        other => Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "bad_request",
+            format!("unknown format {other}; use json, csv or markdown"),
+        )),
     }
 }
 
 fn column_indexes(r: &QueryResult, spec: Option<&str>) -> Result<Option<Vec<usize>>, ApiError> {
-    let Some(spec) = spec.filter(|s| !s.trim().is_empty()) else { return Ok(None) };
+    let Some(spec) = spec.filter(|s| !s.trim().is_empty()) else {
+        return Ok(None);
+    };
     let mut out = Vec::new();
     for name in spec.split(',').map(str::trim) {
         match r.columns.iter().position(|c| c.name == name) {
             Some(i) => out.push(i),
-            None => return Err(ApiError::new(StatusCode::BAD_REQUEST, "bad_request", format!("no column named {name}"))),
+            None => {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "bad_request",
+                    format!("no column named {name}"),
+                ));
+            }
         }
     }
     Ok(Some(out))
@@ -489,20 +617,31 @@ fn column_indexes(r: &QueryResult, spec: Option<&str>) -> Result<Option<Vec<usiz
 async fn result(State(ctx): State<AppCtx>, Query(q): Query<ResultQuery>) -> ApiResult {
     let t = ctx.core.active_ref();
     let Some(r) = ctx.core.get_result(&t.id)? else {
-        return Err(ApiError::new(StatusCode::NOT_FOUND, "no_result", "the active tab has no result yet"));
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "no_result",
+            "the active tab has no result yet",
+        ));
     };
     let cfg = ctx.core.config().server;
     let n = q.rows.unwrap_or(cfg.default_rows).min(cfg.max_rows);
     let cols = column_indexes(&r, q.columns.as_deref())?;
     let mut body = result_json(&r, q.offset.unwrap_or(0), n, cols.as_deref());
-    merge(&mut body, json!({ "tab": tab_json(&t), "executed_sql": r.executed_sql }));
+    merge(
+        &mut body,
+        json!({ "tab": tab_json(&t), "executed_sql": r.executed_sql }),
+    );
     respond_rows(body, q.format.as_deref())
 }
 
 async fn result_schema(State(ctx): State<AppCtx>) -> ApiResult {
     let t = ctx.core.active_ref();
     let Some(r) = ctx.core.get_result(&t.id)? else {
-        return Err(ApiError::new(StatusCode::NOT_FOUND, "no_result", "the active tab has no result yet"));
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "no_result",
+            "the active tab has no result yet",
+        ));
     };
     Ok(Json(json!({
         "tab": tab_json(&t),
@@ -518,7 +657,11 @@ async fn result_schema(State(ctx): State<AppCtx>) -> ApiResult {
 async fn selection(State(ctx): State<AppCtx>, Query(q): Query<ResultQuery>) -> ApiResult {
     let t = ctx.core.active_ref();
     let Some(r) = ctx.core.get_result(&t.id)? else {
-        return Err(ApiError::new(StatusCode::NOT_FOUND, "no_result", "the active tab has no result yet"));
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "no_result",
+            "the active tab has no result yet",
+        ));
     };
     let Some(sel) = ctx.core.get_selection(&t.id)? else {
         return Ok(Json(json!({ "tab": tab_json(&t), "selection": null, "rows": [], "columns": [], "returned_rows": 0 })).into_response());
@@ -530,7 +673,10 @@ async fn selection(State(ctx): State<AppCtx>, Query(q): Query<ResultQuery>) -> A
     let cols: Vec<usize> = (sel.col_start.min(col_end)..=col_end).collect();
     let count = row_end + 1 - sel.row_start.min(row_end + 1);
     let mut body = result_json(&r, sel.row_start, n.min(count), Some(&cols));
-    merge(&mut body, json!({ "tab": tab_json(&t), "selection": sel, "selected_rows": count }));
+    merge(
+        &mut body,
+        json!({ "tab": tab_json(&t), "selection": sel, "selected_rows": count }),
+    );
     respond_rows(body, q.format.as_deref())
 }
 
@@ -545,7 +691,9 @@ async fn stats(State(ctx): State<AppCtx>, Query(q): Query<StatsQuery>) -> ApiRes
     // Opening the panel makes the SUMMARIZE run visible to the user.
     ctx.core.set_stats_open(&t.id, true)?;
     let deadline = tokio::time::Instant::now() + Duration::from_millis(q.wait_ms.unwrap_or(30_000));
-    while ctx.core.stats_state(&t.id)?.0 == RunStatus::Running && tokio::time::Instant::now() < deadline {
+    while ctx.core.stats_state(&t.id)?.0 == RunStatus::Running
+        && tokio::time::Instant::now() < deadline
+    {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     let (status, res, err) = ctx.core.stats_state(&t.id)?;
@@ -555,7 +703,11 @@ async fn stats(State(ctx): State<AppCtx>, Query(q): Query<StatsQuery>) -> ApiRes
             merge(&mut body, json!({ "tab": tab_json(&t), "status": "done" }));
             respond_rows(body, q.format.as_deref())
         }
-        (RunStatus::Running, None) => Ok((StatusCode::ACCEPTED, Json(json!({ "tab": tab_json(&t), "status": "running" }))).into_response()),
+        (RunStatus::Running, None) => Ok((
+            StatusCode::ACCEPTED,
+            Json(json!({ "tab": tab_json(&t), "status": "running" })),
+        )
+            .into_response()),
         (_, None) => Err(ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "no_stats",
@@ -574,10 +726,16 @@ async fn catalog(State(ctx): State<AppCtx>, Query(q): Query<CatalogQuery>) -> Ap
     let core = ctx.core.clone();
     let tables = tokio::task::spawn_blocking(move || core.catalog())
         .await
-        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "internal", e.to_string()))??;
+        .map_err(|e| {
+            ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "internal", e.to_string())
+        })??;
     let mut tables = tables;
     if let Some(name) = q.table.as_deref().filter(|s| !s.is_empty()) {
-        tables.retain(|t| t.name == name || format!("{}.{}", t.schema, t.name) == name || format!("{}.{}.{}", t.database, t.schema, t.name) == name);
+        tables.retain(|t| {
+            t.name == name
+                || format!("{}.{}", t.schema, t.name) == name
+                || format!("{}.{}.{}", t.database, t.schema, t.name) == name
+        });
     }
     if let Some(query) = q.q.as_deref().filter(|s| !s.trim().is_empty()) {
         tables = crate::fuzzy::filter_catalog(tables, query);
@@ -590,10 +748,20 @@ async fn events(State(ctx): State<AppCtx>) -> Response {
     let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|e| async move {
         let e = e.ok()?;
         let v = serde_json::to_value(&e).ok()?;
-        let name = v.get("type").and_then(|t| t.as_str()).unwrap_or("event").to_string();
-        Some(Ok::<_, std::convert::Infallible>(axum::response::sse::Event::default().event(name).data(v.to_string())))
+        let name = v
+            .get("type")
+            .and_then(|t| t.as_str())
+            .unwrap_or("event")
+            .to_string();
+        Some(Ok::<_, std::convert::Infallible>(
+            axum::response::sse::Event::default()
+                .event(name)
+                .data(v.to_string()),
+        ))
     });
-    Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 #[cfg(test)]
@@ -624,6 +792,9 @@ mod tests {
     fn markdown_and_csv() {
         let body = json!({ "columns": [{"name": "a"}, {"name": "b"}], "rows": [[1, "x,y"], [null, "p|q"]] });
         assert_eq!(render_text(&body, "csv"), "a,b\n1,\"x,y\"\n,p|q\n");
-        assert_eq!(render_text(&body, "markdown"), "| a | b |\n|---|---|\n| 1 | x,y |\n| NULL | p\\|q |\n");
+        assert_eq!(
+            render_text(&body, "markdown"),
+            "| a | b |\n|---|---|\n| 1 | x,y |\n| NULL | p\\|q |\n"
+        );
     }
 }

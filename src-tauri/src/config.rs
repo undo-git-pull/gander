@@ -270,20 +270,35 @@ pub struct WorkspaceTrust {
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Remove keys the workspace file is not allowed to set. Returns the removed keys.
 fn restrict_workspace(table: &mut toml::Table, trusted: bool) -> Vec<String> {
     let mut removed = Vec::new();
-    for k in GLOBAL_ONLY_KEYS.iter().chain(if trusted { [].iter() } else { TRUST_KEYS.iter() }) {
+    for k in GLOBAL_ONLY_KEYS.iter().chain(if trusted {
+        [].iter()
+    } else {
+        TRUST_KEYS.iter()
+    }) {
         if let Some(v) = table.remove(*k) {
             removed.push(k.to_string());
             // A default pointing at a connection that was just dropped would
             // only show up as a confusing config error; drop it too.
             if *k == "connections" {
-                let names: Vec<&str> = v.as_array().into_iter().flatten().filter_map(|c| c.get("name")?.as_str()).collect();
-                let points_at_dropped = table.get("default_connection").and_then(|d| d.as_str()).is_some_and(|d| names.contains(&d));
+                let names: Vec<&str> = v
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|c| c.get("name")?.as_str())
+                    .collect();
+                let points_at_dropped = table
+                    .get("default_connection")
+                    .and_then(|d| d.as_str())
+                    .is_some_and(|d| names.contains(&d));
                 if points_at_dropped {
                     table.remove("default_connection");
                     removed.push("default_connection".into());
@@ -350,7 +365,10 @@ pub fn load(global: &Path, workspace: Option<&Path>, trusted_hash: Option<&str>)
     let mut merged = toml::Table::new();
     let mut files = vec![global.to_path_buf()];
     let mut trust = WorkspaceTrust::default();
-    match read_file(global).and_then(|t| t.map(|t| parse_text(&t, &global.display().to_string())).transpose()) {
+    match read_file(global).and_then(|t| {
+        t.map(|t| parse_text(&t, &global.display().to_string()))
+            .transpose()
+    }) {
         Ok(Some(t)) => merge(&mut merged, t),
         Ok(None) => {}
         Err(e) => errors.push(e),
@@ -366,7 +384,8 @@ pub fn load(global: &Path, workspace: Option<&Path>, trusted_hash: Option<&str>)
                 trust.hash = Some(hash);
                 match parse_text(&text, &ws.display().to_string()) {
                     Ok(mut t) => {
-                        trust.needs_trust = !trust.trusted && TRUST_KEYS.iter().any(|k| t.contains_key(*k));
+                        trust.needs_trust =
+                            !trust.trusted && TRUST_KEYS.iter().any(|k| t.contains_key(*k));
                         trust.ignored = restrict_workspace(&mut t, trust.trusted);
                         merge(&mut merged, t);
                     }
@@ -393,7 +412,9 @@ pub fn load(global: &Path, workspace: Option<&Path>, trusted_hash: Option<&str>)
             errors.push(ConfigError {
                 file: "merged config".into(),
                 line: None,
-                message: format!("default_connection \"{name}\" does not match any [[connections]] name"),
+                message: format!(
+                    "default_connection \"{name}\" does not match any [[connections]] name"
+                ),
             });
         }
     }
@@ -424,7 +445,10 @@ fn read_trust_store() -> std::collections::BTreeMap<String, String> {
 }
 
 fn trust_key(ws_config: &Path) -> String {
-    std::fs::canonicalize(ws_config).unwrap_or_else(|_| ws_config.to_path_buf()).display().to_string()
+    std::fs::canonicalize(ws_config)
+        .unwrap_or_else(|_| ws_config.to_path_buf())
+        .display()
+        .to_string()
 }
 
 /// Hash of the workspace config contents the user last approved.
@@ -482,8 +506,15 @@ mod tests {
         let c = Config::deserialize(toml::Value::Table(base)).unwrap();
         assert_eq!(c.ui.theme, Theme::Dark);
         assert_eq!(c.ui.font_size, 11);
-        let names: Vec<_> = c.connections.iter().map(|c| (c.name.as_str(), c.path.as_str())).collect();
-        assert_eq!(names, vec![("a", "a.duckdb"), ("b", "b2.duckdb"), ("c", ":memory:")]);
+        let names: Vec<_> = c
+            .connections
+            .iter()
+            .map(|c| (c.name.as_str(), c.path.as_str()))
+            .collect();
+        assert_eq!(
+            names,
+            vec![("a", "a.duckdb"), ("b", "b2.duckdb"), ("c", ":memory:")]
+        );
     }
 
     #[test]
@@ -501,7 +532,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let g = dir.path().join("global.toml");
         let w = dir.path().join("ws.toml");
-        std::fs::write(&g, "[server]\napi_key = \"global\"\n[[connections]]\nname = \"g\"\npath = \":memory:\"\n").unwrap();
+        std::fs::write(
+            &g,
+            "[server]\napi_key = \"global\"\n[[connections]]\nname = \"g\"\npath = \":memory:\"\n",
+        )
+        .unwrap();
         let ws_text = "default_connection = \"x\"\n[server]\napi_key = \"\"\nport = 1\n[ui]\nfont_size = 14\n[[connections]]\nname = \"x\"\npath = \":memory:\"\ninit_sql = [\"select 1\"]\n";
         std::fs::write(&w, ws_text).unwrap();
 
@@ -509,9 +544,19 @@ mod tests {
         assert_eq!(l.config.server.api_key.as_deref(), Some("global"));
         assert_eq!(l.config.server.port, 7420);
         assert_eq!(l.config.ui.font_size, 14);
-        assert_eq!(l.config.connections.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["g"]);
+        assert_eq!(
+            l.config
+                .connections
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["g"]
+        );
         assert!(l.trust.needs_trust && !l.trust.trusted);
-        assert_eq!(l.trust.ignored, vec!["server", "connections", "default_connection"]);
+        assert_eq!(
+            l.trust.ignored,
+            vec!["server", "connections", "default_connection"]
+        );
         assert_eq!(l.config.default_connection, None);
         assert!(l.errors.is_empty(), "{:?}", l.errors);
 

@@ -33,16 +33,23 @@ async fn workspace_connections_wait_for_approval() {
 
     // Untrusted: nothing runs, and the API still uses a generated key.
     let c = new_core();
-    assert!(!marker.exists(), "init_sql ran from an untrusted workspace config");
+    assert!(
+        !marker.exists(),
+        "init_sql ran from an untrusted workspace config"
+    );
     assert_eq!(c.source_info().label, "Files only");
     assert!(c.snapshot().workspace_trust.needs_trust);
     assert!(c.api_key_is_generated());
 
     // A stale hash is refused.
-    assert!(c.trust_workspace_config(&config::sha256_hex(b"something else")).is_err());
+    assert!(
+        c.trust_workspace_config(&config::sha256_hex(b"something else"))
+            .is_err()
+    );
 
     // Approving the exact contents opens the default connection.
-    c.trust_workspace_config(&config::sha256_hex(text.as_bytes())).unwrap();
+    c.trust_workspace_config(&config::sha256_hex(text.as_bytes()))
+        .unwrap();
     for _ in 0..100 {
         if marker.exists() {
             break;
@@ -66,6 +73,9 @@ async fn workspace_connections_wait_for_approval() {
     std::fs::remove_file(&marker).unwrap();
     std::fs::write(&ws_cfg, format!("{text}# edited\n")).unwrap();
     let c = new_core();
-    assert!(!marker.exists(), "edited workspace config ran without new approval");
+    assert!(
+        !marker.exists(),
+        "edited workspace config ran without new approval"
+    );
     assert!(c.snapshot().workspace_trust.needs_trust);
 }

@@ -50,7 +50,11 @@ fn open_path(path: &Path, read_only: bool) -> duckdb::Result<Connection> {
     Connection::open_with_flags(path, cfg)
 }
 
-pub fn open_source(spec: &SourceSpec, config: &Config, workspace: Option<&Path>) -> anyhow::Result<OpenedSource> {
+pub fn open_source(
+    spec: &SourceSpec,
+    config: &Config,
+    workspace: Option<&Path>,
+) -> anyhow::Result<OpenedSource> {
     match spec {
         SourceSpec::Memory => Ok(OpenedSource {
             info: SourceInfo {
@@ -75,8 +79,13 @@ pub fn open_source(spec: &SourceSpec, config: &Config, workspace: Option<&Path>)
             };
             Ok(OpenedSource {
                 info: SourceInfo {
-                    spec: SourceSpec::File { path: p.display().to_string() },
-                    label: p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default(),
+                    spec: SourceSpec::File {
+                        path: p.display().to_string(),
+                    },
+                    label: p
+                        .file_name()
+                        .map(|f| f.to_string_lossy().to_string())
+                        .unwrap_or_default(),
                     path: Some(p.display().to_string()),
                     read_only: ro,
                     has_catalog: true,
@@ -96,12 +105,20 @@ pub fn open_source(spec: &SourceSpec, config: &Config, workspace: Option<&Path>)
     }
 }
 
-fn open_configured(cc: &ConnectionConfig, workspace: Option<&Path>) -> anyhow::Result<OpenedSource> {
+fn open_configured(
+    cc: &ConnectionConfig,
+    workspace: Option<&Path>,
+) -> anyhow::Result<OpenedSource> {
     let memory = cc.path == ":memory:" || cc.path.is_empty();
-    let resolved: Option<PathBuf> = if memory { None } else { Some(paths::expand(&cc.path, workspace)) };
+    let resolved: Option<PathBuf> = if memory {
+        None
+    } else {
+        Some(paths::expand(&cc.path, workspace))
+    };
     let conn = match &resolved {
         None => Connection::open_in_memory()?,
-        Some(p) => open_path(p, cc.read_only).map_err(|e| anyhow::anyhow!("opening {}: {e}", p.display()))?,
+        Some(p) => open_path(p, cc.read_only)
+            .map_err(|e| anyhow::anyhow!("opening {}: {e}", p.display()))?,
     };
     let mut warnings = Vec::new();
     for ext in &cc.extensions {
@@ -111,9 +128,15 @@ fn open_configured(cc: &ConnectionConfig, workspace: Option<&Path>) -> anyhow::R
         }
     }
     for a in &cc.attach {
-        let p = paths::expand(&a.path, workspace).display().to_string().replace('\'', "''");
+        let p = paths::expand(&a.path, workspace)
+            .display()
+            .to_string()
+            .replace('\'', "''");
         let ro = if a.read_only { " (READ_ONLY)" } else { "" };
-        if let Err(e) = conn.execute_batch(&format!("ATTACH '{p}' AS {}{ro};", wrap::quote_ident(&a.alias))) {
+        if let Err(e) = conn.execute_batch(&format!(
+            "ATTACH '{p}' AS {}{ro};",
+            wrap::quote_ident(&a.alias)
+        )) {
             warnings.push(format!("attach {}: {e}", a.alias));
         }
     }
@@ -124,7 +147,9 @@ fn open_configured(cc: &ConnectionConfig, workspace: Option<&Path>) -> anyhow::R
     }
     Ok(OpenedSource {
         info: SourceInfo {
-            spec: SourceSpec::Configured { name: cc.name.clone() },
+            spec: SourceSpec::Configured {
+                name: cc.name.clone(),
+            },
             label: cc.name.clone(),
             path: resolved.as_ref().map(|p| p.display().to_string()),
             read_only: cc.read_only,
@@ -175,7 +200,9 @@ impl std::fmt::Display for QueryError {
 impl From<duckdb::Error> for QueryError {
     fn from(e: duckdb::Error) -> Self {
         let message = e.to_string();
-        let code = if message.contains("INTERRUPT") || message.to_ascii_lowercase().contains("interrupted") {
+        let code = if message.contains("INTERRUPT")
+            || message.to_ascii_lowercase().contains("interrupted")
+        {
             "interrupted"
         } else {
             "query_error"
@@ -189,7 +216,11 @@ pub const UNLIMITED_CONFIRM_ROWS: u64 = 1_000_000;
 /// Decide whether a statement is a query, using DuckDB's parser.
 /// `json_serialize_sql` only accepts SELECT statements.
 pub fn is_query(conn: &Connection, stmt: &str) -> bool {
-    let r: duckdb::Result<String> = conn.query_row("SELECT json_serialize_sql(?::VARCHAR)::VARCHAR", [stmt], |row| row.get(0));
+    let r: duckdb::Result<String> = conn.query_row(
+        "SELECT json_serialize_sql(?::VARCHAR)::VARCHAR",
+        [stmt],
+        |row| row.get(0),
+    );
     match r {
         Ok(json) => match serde_json::from_str::<serde_json::Value>(&json) {
             Ok(v) => !v.get("error").and_then(|e| e.as_bool()).unwrap_or(false),
@@ -215,7 +246,10 @@ pub fn run(conn: &Connection, opts: RunOptions) -> Result<QueryResult, QueryErro
     let started = Instant::now();
     let stmts = wrap::split(opts.sql);
     let Some(last) = stmts.last().cloned() else {
-        return Err(QueryError { code: "empty", message: "Nothing to run".into() });
+        return Err(QueryError {
+            code: "empty",
+            message: "Nothing to run".into(),
+        });
     };
     if !opts.last_only {
         for s in &stmts[..stmts.len() - 1] {
@@ -238,17 +272,28 @@ pub fn run(conn: &Connection, opts: RunOptions) -> Result<QueryResult, QueryErro
     }
     let described = describe(conn, &last)?;
     let names: Vec<&str> = described.iter().map(|(n, _)| n.as_str()).collect();
-    let sort: Vec<SortSpec> = opts.sort.iter().filter(|s| names.contains(&s.column.as_str())).cloned().collect();
+    let sort: Vec<SortSpec> = opts
+        .sort
+        .iter()
+        .filter(|s| names.contains(&s.column.as_str()))
+        .cloned()
+        .collect();
     if opts.limit == 0 && !opts.force {
         let n: i64 = conn.query_row(&wrap::count_sql(&last), [], |r| r.get(0))?;
         if n as u64 > UNLIMITED_CONFIRM_ROWS {
             return Err(QueryError {
                 code: "too_many_rows",
-                message: format!("Query returns {n} rows with no row limit. Run anyway to load them all."),
+                message: format!(
+                    "Query returns {n} rows with no row limit. Run anyway to load them all."
+                ),
             });
         }
     }
-    let fetch = if opts.limit == 0 { None } else { Some(opts.limit + 1) };
+    let fetch = if opts.limit == 0 {
+        None
+    } else {
+        Some(opts.limit + 1)
+    };
     let unique = {
         let mut seen = std::collections::HashSet::new();
         names.iter().all(|n| seen.insert(*n))
@@ -258,12 +303,24 @@ pub fn run(conn: &Connection, opts: RunOptions) -> Result<QueryResult, QueryErro
         let proj = wrap::display_projection(&described);
         let sql = wrap::wrap_with_projection(&last, &proj, &sort, fetch);
         let rows = fetch_rows(conn, &sql, &described)?;
-        let cols = described.iter().map(|(n, t)| Column { name: n.clone(), ty: t.clone() }).collect();
+        let cols = described
+            .iter()
+            .map(|(n, t)| Column {
+                name: n.clone(),
+                ty: t.clone(),
+            })
+            .collect();
         (cols, rows)
     } else {
         // Duplicate column names cannot be referenced individually; fetch as-is.
         let (_, rows) = fetch_generic(conn, &executed_sql)?;
-        let cols = described.iter().map(|(n, t)| Column { name: n.clone(), ty: t.clone() }).collect();
+        let cols = described
+            .iter()
+            .map(|(n, t)| Column {
+                name: n.clone(),
+                ty: t.clone(),
+            })
+            .collect();
         (cols, rows)
     };
     let truncated = opts.limit > 0 && rows.len() > opts.limit;
@@ -293,7 +350,11 @@ pub fn describe(conn: &Connection, query: &str) -> Result<Vec<(String, String)>,
     Ok(out)
 }
 
-fn fetch_rows(conn: &Connection, sql: &str, cols: &[(String, String)]) -> Result<Vec<Vec<serde_json::Value>>, QueryError> {
+fn fetch_rows(
+    conn: &Connection,
+    sql: &str,
+    cols: &[(String, String)],
+) -> Result<Vec<Vec<serde_json::Value>>, QueryError> {
     let mut stmt = conn.prepare(sql)?;
     let mut rows = stmt.query([])?;
     let mut out = Vec::new();
@@ -302,7 +363,9 @@ fn fetch_rows(conn: &Connection, sql: &str, cols: &[(String, String)]) -> Result
         for (i, (_, ty)) in cols.iter().enumerate() {
             let v: Value = r.get(i)?;
             let j = match v {
-                Value::Text(s) if wrap::is_nested_type(ty) => serde_json::from_str(&s).unwrap_or(serde_json::Value::String(s)),
+                Value::Text(s) if wrap::is_nested_type(ty) => {
+                    serde_json::from_str(&s).unwrap_or(serde_json::Value::String(s))
+                }
                 other => to_json(other),
             };
             row.push(j);
@@ -312,7 +375,10 @@ fn fetch_rows(conn: &Connection, sql: &str, cols: &[(String, String)]) -> Result
     Ok(out)
 }
 
-fn fetch_generic(conn: &Connection, sql: &str) -> Result<(Vec<Column>, Vec<Vec<serde_json::Value>>), QueryError> {
+fn fetch_generic(
+    conn: &Connection,
+    sql: &str,
+) -> Result<(Vec<Column>, Vec<Vec<serde_json::Value>>), QueryError> {
     let mut stmt = conn.prepare(sql)?;
     let mut rows = stmt.query([])?;
     let mut out = Vec::new();
@@ -342,7 +408,10 @@ fn column_meta(st: &duckdb::Statement) -> Vec<Column> {
     names
         .into_iter()
         .enumerate()
-        .map(|(i, name)| Column { name, ty: arrow_type_name(&st.column_type(i)) })
+        .map(|(i, name)| Column {
+            name,
+            ty: arrow_type_name(&st.column_type(i)),
+        })
         .collect()
 }
 
@@ -474,7 +543,11 @@ fn format_time(us: i64) -> String {
 fn format_timestamp(unit: TimeUnit, t: i64) -> String {
     let us = to_micros(unit, t);
     let days = us.div_euclid(86_400_000_000);
-    format!("{} {}", format_date(days), format_time(us.rem_euclid(86_400_000_000)))
+    format!(
+        "{} {}",
+        format_date(days),
+        format_time(us.rem_euclid(86_400_000_000))
+    )
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -524,9 +597,16 @@ pub fn catalog(conn: &Connection) -> Result<Vec<CatalogTable>, QueryError> {
     )?;
     let mut rows = stmt.query([])?;
     while let Some(r) = rows.next()? {
-        let key = (r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?);
+        let key = (
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        );
         if let Some(&i) = index.get(&key) {
-            tables[i].columns.push(CatalogColumn { name: r.get(3)?, ty: r.get(4)? });
+            tables[i].columns.push(CatalogColumn {
+                name: r.get(3)?,
+                ty: r.get(4)?,
+            });
         }
     }
     Ok(tables)
@@ -548,7 +628,13 @@ mod tests {
     }
 
     fn opts<'a>(sql: &'a str, sort: &'a [SortSpec], limit: usize) -> RunOptions<'a> {
-        RunOptions { sql, last_only: false, sort, limit, force: false }
+        RunOptions {
+            sql,
+            last_only: false,
+            sort,
+            limit,
+            force: false,
+        }
     }
 
     #[test]
@@ -568,8 +654,14 @@ mod tests {
     fn sort_desc_and_unknown_column_dropped() {
         let c = mem();
         let sort = vec![
-            SortSpec { column: "id".into(), dir: SortDir::Desc },
-            SortSpec { column: "missing".into(), dir: SortDir::Asc },
+            SortSpec {
+                column: "id".into(),
+                dir: SortDir::Desc,
+            },
+            SortSpec {
+                column: "missing".into(),
+                dir: SortDir::Asc,
+            },
         ];
         let r = run(&c, opts("from t", &sort, 3)).unwrap();
         assert_eq!(r.sort.len(), 1);
@@ -579,7 +671,15 @@ mod tests {
     #[test]
     fn value_rendering() {
         let c = mem();
-        let r = run(&c, opts("select id::INTEGER as i, amount, meta, js, big, d from t order by id limit 2", &[], 100)).unwrap();
+        let r = run(
+            &c,
+            opts(
+                "select id::INTEGER as i, amount, meta, js, big, d from t order by id limit 2",
+                &[],
+                100,
+            ),
+        )
+        .unwrap();
         let row = &r.rows[1];
         assert_eq!(row[0], serde_json::json!(1));
         assert_eq!(row[1], serde_json::json!("1.5"));
@@ -593,7 +693,15 @@ mod tests {
     #[test]
     fn multi_statement_and_ddl() {
         let c = Connection::open_in_memory().unwrap();
-        let r = run(&c, opts("create table x(a int); insert into x values (1),(2); select * from x;", &[], 10)).unwrap();
+        let r = run(
+            &c,
+            opts(
+                "create table x(a int); insert into x values (1),(2); select * from x;",
+                &[],
+                10,
+            ),
+        )
+        .unwrap();
         assert_eq!(r.rows.len(), 2);
         let r = run(&c, opts("create table y(a int)", &[], 10)).unwrap();
         assert!(!r.wrapped);
@@ -630,14 +738,17 @@ mod tests {
         let r = run(&c, opts(&wrap::summarize_sql("from t"), &[], 0)).unwrap();
         assert_eq!(r.columns[0].name, "column_name");
         assert_eq!(r.rows.len(), 6);
-        let n: i64 = c.query_row(&wrap::count_sql("from t"), [], |r| r.get(0)).unwrap();
+        let n: i64 = c
+            .query_row(&wrap::count_sql("from t"), [], |r| r.get(0))
+            .unwrap();
         assert_eq!(n, 25);
     }
 
     #[test]
     fn catalog_lists_tables_and_columns() {
         let c = mem();
-        c.execute_batch("create view v as select id from t").unwrap();
+        c.execute_batch("create view v as select id from t")
+            .unwrap();
         let cat = catalog(&c).unwrap();
         let t = cat.iter().find(|t| t.name == "t").unwrap();
         assert_eq!(t.kind, "table");
@@ -649,19 +760,35 @@ mod tests {
     fn dates() {
         assert_eq!(format_date(0), "1970-01-01");
         assert_eq!(format_date(20_394), "2025-11-02");
-        assert_eq!(format_timestamp(TimeUnit::Microsecond, 1_500_000), "1970-01-01 00:00:01.500000");
+        assert_eq!(
+            format_timestamp(TimeUnit::Microsecond, 1_500_000),
+            "1970-01-01 00:00:01.500000"
+        );
     }
 
     #[test]
     fn histograms() {
-        use wrap::{histogram_kind, histogram_sql, HistogramKind};
+        use wrap::{HistogramKind, histogram_kind, histogram_sql};
         let c = mem();
         let h = |q: &str, col: &str, ty: &str| {
             let sql = histogram_sql(q, col, histogram_kind(ty));
-            run(&c, RunOptions { sql: &sql, last_only: false, sort: &[], limit: 0, force: true }).unwrap()
+            run(
+                &c,
+                RunOptions {
+                    sql: &sql,
+                    last_only: false,
+                    sort: &[],
+                    limit: 0,
+                    force: true,
+                },
+            )
+            .unwrap()
         };
         assert_eq!(histogram_kind("DECIMAL(18,3)"), HistogramKind::Numeric);
-        assert_eq!(histogram_kind("TIMESTAMP WITH TIME ZONE"), HistogramKind::Timestamp);
+        assert_eq!(
+            histogram_kind("TIMESTAMP WITH TIME ZONE"),
+            HistogramKind::Timestamp
+        );
         assert_eq!(histogram_kind("VARCHAR"), HistogramKind::Values);
 
         let r = h("from t;", "amount", "DECIMAL(18,1)");
@@ -673,7 +800,11 @@ mod tests {
         assert_eq!(h("from t", "d", "DATE").rows.len(), 1);
         assert_eq!(h("from t where id < 0", "id", "BIGINT").rows.len(), 0);
 
-        let r = h("select (id % 30)::VARCHAR as s from t union all select null", "s", "VARCHAR");
+        let r = h(
+            "select (id % 30)::VARCHAR as s from t union all select null",
+            "s",
+            "VARCHAR",
+        );
         assert_eq!(r.rows.len(), wrap::HISTOGRAM_BINS + 1);
         let last = r.rows.last().unwrap();
         assert_eq!(last[3], serde_json::Value::Bool(true));

@@ -65,7 +65,16 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
                     &P::select_all(app, None)?,
                 ],
             )?,
-            &Submenu::with_items(app, "Window", true, &[&P::minimize(app, None)?, &P::maximize(app, None)?, &P::fullscreen(app, None)?])?,
+            &Submenu::with_items(
+                app,
+                "Window",
+                true,
+                &[
+                    &P::minimize(app, None)?,
+                    &P::maximize(app, None)?,
+                    &P::fullscreen(app, None)?,
+                ],
+            )?,
         ],
     )
 }

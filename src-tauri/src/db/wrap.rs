@@ -148,7 +148,17 @@ pub fn looks_like_query(stmt: &str) -> bool {
     let first = first_keyword(stmt);
     matches!(
         first.as_str(),
-        "SELECT" | "WITH" | "FROM" | "VALUES" | "TABLE" | "SUMMARIZE" | "DESCRIBE" | "PIVOT" | "UNPIVOT" | "SHOW" | "("
+        "SELECT"
+            | "WITH"
+            | "FROM"
+            | "VALUES"
+            | "TABLE"
+            | "SUMMARIZE"
+            | "DESCRIBE"
+            | "PIVOT"
+            | "UNPIVOT"
+            | "SHOW"
+            | "("
     )
 }
 
@@ -180,7 +190,12 @@ pub fn wrap(query: &str, sort: &[SortSpec], fetch: Option<usize>) -> String {
     wrap_with_projection(query, "*", sort, fetch)
 }
 
-pub fn wrap_with_projection(query: &str, projection: &str, sort: &[SortSpec], fetch: Option<usize>) -> String {
+pub fn wrap_with_projection(
+    query: &str,
+    projection: &str,
+    sort: &[SortSpec],
+    fetch: Option<usize>,
+) -> String {
     let mut sql = format!("SELECT {projection} FROM (\n{}\n) AS a", strip_query(query));
     if !sort.is_empty() {
         let parts: Vec<String> = sort
@@ -232,7 +247,15 @@ pub fn describe_sql(query: &str) -> String {
 pub fn is_native_type(t: &str) -> bool {
     matches!(
         t,
-        "BOOLEAN" | "TINYINT" | "SMALLINT" | "INTEGER" | "UTINYINT" | "USMALLINT" | "UINTEGER" | "FLOAT" | "DOUBLE"
+        "BOOLEAN"
+            | "TINYINT"
+            | "SMALLINT"
+            | "INTEGER"
+            | "UTINYINT"
+            | "USMALLINT"
+            | "UINTEGER"
+            | "FLOAT"
+            | "DOUBLE"
     )
 }
 
@@ -270,13 +293,23 @@ mod tests {
     #[test]
     fn splits_on_top_level_semicolons() {
         let s = split("select 1; select ';' as x; -- c;\nselect \"a;b\" from t;");
-        assert_eq!(s, vec!["select 1", "select ';' as x", "-- c;\nselect \"a;b\" from t"]);
+        assert_eq!(
+            s,
+            vec![
+                "select 1",
+                "select ';' as x",
+                "-- c;\nselect \"a;b\" from t"
+            ]
+        );
     }
 
     #[test]
     fn split_handles_block_comments_and_dollar_quotes() {
         let s = split("select /* ; */ 1; select $$a;b$$; select $t$x;$t$");
-        assert_eq!(s, vec!["select /* ; */ 1", "select $$a;b$$", "select $t$x;$t$"]);
+        assert_eq!(
+            s,
+            vec!["select /* ; */ 1", "select $$a;b$$", "select $t$x;$t$"]
+        );
     }
 
     #[test]
@@ -287,7 +320,10 @@ mod tests {
 
     #[test]
     fn split_escaped_quotes() {
-        assert_eq!(split("select 'it''s;'; select 2"), vec!["select 'it''s;'", "select 2"]);
+        assert_eq!(
+            split("select 'it''s;'; select 2"),
+            vec!["select 'it''s;'", "select 2"]
+        );
     }
 
     #[test]
@@ -301,10 +337,19 @@ mod tests {
 
     #[test]
     fn wrap_plain_and_sorted() {
-        assert_eq!(wrap("select 1;", &[], Some(1001)), "SELECT * FROM (\nselect 1\n) AS a LIMIT 1001");
+        assert_eq!(
+            wrap("select 1;", &[], Some(1001)),
+            "SELECT * FROM (\nselect 1\n) AS a LIMIT 1001"
+        );
         let sort = vec![
-            SortSpec { column: "amount".into(), dir: SortDir::Desc },
-            SortSpec { column: "we\"ird name".into(), dir: SortDir::Asc },
+            SortSpec {
+                column: "amount".into(),
+                dir: SortDir::Desc,
+            },
+            SortSpec {
+                column: "we\"ird name".into(),
+                dir: SortDir::Asc,
+            },
         ];
         assert_eq!(
             wrap("from t ;; ", &sort, Some(11)),
@@ -366,8 +411,10 @@ pub fn histogram_kind(ty: &str) -> HistogramKind {
     let t = ty.trim().to_ascii_uppercase();
     let base = t.split('(').next().unwrap_or("").trim();
     match base {
-        "TINYINT" | "SMALLINT" | "INTEGER" | "BIGINT" | "HUGEINT" | "UTINYINT" | "USMALLINT" | "UINTEGER" | "UBIGINT"
-        | "UHUGEINT" | "FLOAT" | "DOUBLE" | "DECIMAL" => HistogramKind::Numeric,
+        "TINYINT" | "SMALLINT" | "INTEGER" | "BIGINT" | "HUGEINT" | "UTINYINT" | "USMALLINT"
+        | "UINTEGER" | "UBIGINT" | "UHUGEINT" | "FLOAT" | "DOUBLE" | "DECIMAL" => {
+            HistogramKind::Numeric
+        }
         "DATE" => HistogramKind::Date,
         _ if base.starts_with("TIMESTAMP") => HistogramKind::Timestamp,
         _ => HistogramKind::Values,

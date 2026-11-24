@@ -24,13 +24,19 @@ pub fn run(current_workspace: Option<&Path>) {
     compact_history(&paths::history_file(), HISTORY_KEEP, HISTORY_COMPACT_AT);
     let current = paths::tabs_file(current_workspace);
     let current_dir = current.parent().map(Path::to_path_buf);
-    prune_workspaces(&paths::state_dir().join("workspaces"), current_dir.as_deref(), SystemTime::now());
+    prune_workspaces(
+        &paths::state_dir().join("workspaces"),
+        current_dir.as_deref(),
+        SystemTime::now(),
+    );
 }
 
 /// Keep only the newest `keep` lines of the history log once it holds more
 /// than `threshold` lines. Returns true when the file was rewritten.
 pub fn compact_history(path: &Path, keep: usize, threshold: usize) -> bool {
-    let Ok(text) = std::fs::read_to_string(path) else { return false };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     if lines.len() <= threshold {
         return false;
@@ -50,7 +56,9 @@ struct WorkspaceMarker {
 /// `default` (no workspace) and `current` are never removed. Returns the
 /// number of folders deleted.
 pub fn prune_workspaces(root: &Path, current: Option<&Path>, now: SystemTime) -> usize {
-    let Ok(entries) = std::fs::read_dir(root) else { return 0 };
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return 0;
+    };
     let mut removed = 0;
     for entry in entries.flatten() {
         let dir = entry.path();
@@ -114,12 +122,21 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
         let r = root.path();
-        let live = format!("{{\"workspace\":{:?},\"tabs\":[]}}", project.path().display().to_string());
+        let live = format!(
+            "{{\"workspace\":{:?},\"tabs\":[]}}",
+            project.path().display().to_string()
+        );
         write(&r.join("live/tabs.json"), &live);
-        write(&r.join("gone/tabs.json"), "{\"workspace\":\"/definitely/not/here\",\"tabs\":[]}");
+        write(
+            &r.join("gone/tabs.json"),
+            "{\"workspace\":\"/definitely/not/here\",\"tabs\":[]}",
+        );
         write(&r.join("legacy/tabs.json"), "{\"tabs\":[]}");
         write(&r.join("default/tabs.json"), "{\"tabs\":[]}");
-        write(&r.join("current/tabs.json"), "{\"workspace\":\"/also/not/here\",\"tabs\":[]}");
+        write(
+            &r.join("current/tabs.json"),
+            "{\"workspace\":\"/also/not/here\",\"tabs\":[]}",
+        );
 
         // Fresh files: nothing is old enough yet.
         let now = SystemTime::now();
